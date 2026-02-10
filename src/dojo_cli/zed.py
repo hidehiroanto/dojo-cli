@@ -92,8 +92,8 @@ def check_lang_server_settings():
 
 def upload_lang_server(lang_server: str, home_dir: Path = Path('/home/hacker')):
     lang_dir = home_dir / '.local' / 'share' / 'zed' / 'languages'
-    ls_query = run_cmd(f'ls {lang_dir / lang_server}', True)
-    versions = (ls_query or b'').strip().decode().split()
+    ls_query = run_cmd(f'ls -l {lang_dir / lang_server}', True)
+    versions = [line.split()[-1].decode() for line in (ls_query or b'').splitlines()[1:]]
     latest = requests.get(f'https://api.github.com/repos/astral-sh/{lang_server}/releases/latest').json()
 
     info(f'Installed versions of {lang_server}: {versions}')
@@ -136,8 +136,8 @@ def upload_zed_server(use_lang_servers: bool = False):
     home_dir = Path((echo_query or b'/home/hacker').strip().decode())
     zed_server_dir = home_dir / '.zed_server'
 
-    ls_query = run_cmd(f'ls {zed_server_dir}', True)
-    zed_versions = (ls_query or b'').strip().decode().split()
+    ls_query = run_cmd(f'ls -l {zed_server_dir}', True)
+    zed_versions = [line.split()[-1].decode() for line in (ls_query or b'').splitlines()[1:]]
 
     if sys.platform in ['darwin', 'linux']:
         zed_cli = Path(which('zed') or '~/.local/bin/zed').expanduser()

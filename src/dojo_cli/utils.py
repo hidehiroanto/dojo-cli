@@ -263,7 +263,7 @@ def run_cmd(command: str | None = None, capture_output: bool = False, payload: b
             error('Something went wrong with ssh config or the ssh identity file, please make sure at least one is valid.')
 
         if command:
-            ssh_argv.append(command)
+            ssh_argv.extend(['-t', command])
 
         return subprocess.run(ssh_argv, capture_output=capture_output, input=payload).stdout
 

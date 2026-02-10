@@ -317,6 +317,7 @@ def start(
     elif not dojo or not module:
         challenge_path = parse_challenge_path(challenge, challenge_data)
         if len(challenge_path) == 3 and all(isinstance(s, str) for s in challenge_path):
+            # TODO: confirm this challenge actually exists
             dojo, module, challenge = challenge_path
         else:
             error('Could not parse challenge ID.')
@@ -423,12 +424,11 @@ def du(
 @app.command(rich_help_panel='Remote Connection')
 def dust(
     path: Annotated[Path | None, Option('-p', '--path', help='Path to list files from.')] = None,
-    count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20,
-    width: Annotated[int, Option('-w', '--width', help='Width of the output.')] = 160
+    count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20
 ):
     """List the largest files in a directory, using dust. Helpful when clearing up space."""
 
-    run_cmd(f'dust -CFprx -n {count} -w {width} {path or '~'} 2>/dev/null')
+    run_cmd(f'dust -CFprx -n {count} {path or '~'} 2>/dev/null')
 
 @app.command('down', help='An alias for [bold cyan]download[/].', rich_help_panel='Remote Transfer')
 @app.command(rich_help_panel='Remote Transfer')
