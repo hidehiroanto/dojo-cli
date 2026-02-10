@@ -3,6 +3,7 @@ This is the main command line interface file.
 """
 
 # TODO: transfer command implementations to utils, create more Python files if needed
+# TODO: add commands for solve stats
 # Caveat: this CLI is designed for Linux remote challenges, might work for Mac challenges idk
 
 from getpass import getpass
@@ -323,7 +324,6 @@ def start(
     practice = privileged or not normal or challenge_data.get('practice', False)
     request('/docker', json={'dojo': dojo, 'module': module, 'challenge': challenge, 'practice': practice})
 
-# TODO: implement
 @app.command('next', rich_help_panel='Challenge Launch')
 def start_next(
     normal: Annotated[bool, Option('-n', '--normal', help='Start in normal mode.')] = False,
@@ -340,7 +340,6 @@ def start_next(
     else:
         warn('This is the last challenge in the module.')
 
-# TODO: implement
 @app.command('prev', help='An alias for [bold cyan]previous[/].', rich_help_panel='Challenge Launch')
 @app.command(rich_help_panel='Challenge Launch')
 def previous(

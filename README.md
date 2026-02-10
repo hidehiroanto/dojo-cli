@@ -2,7 +2,11 @@
 
 `dojo-cli` is a Python command line interface and package to interact with the pwn.college API and website.
 
-## Install
+## Images
+
+![dojo-cli](https://github.com/hidehiroanto/dojo-cli/blob/main/images/help.png)
+
+## Quickstart
 
 The easiest way to get started is with `uv`.
 

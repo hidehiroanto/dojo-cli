@@ -18,7 +18,7 @@ def init_sensai():
 
     user_config = load_user_config()
     base_url = user_config['base_url']
-    cookie_path = Path(user_config['cookie_path'])
+    cookie_path = Path(user_config['cookie_path']).expanduser()
     if not cookie_path.is_file():
         error('Login first')
 
