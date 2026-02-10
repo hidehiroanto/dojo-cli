@@ -98,7 +98,7 @@ def load_user_config() -> dict:
 
     global user_config
     if not user_config:
-        config_path = Path(getenv('DOJO_CONFIG', DEFAULT_CONFIG_PATH)).expanduser()
+        config_path = Path(getenv('DOJO_CONFIG', DEFAULT_CONFIG_PATH))
         user_config = deepmerge(DEFAULT_CONFIG, load_config(config_path))
     return user_config
 

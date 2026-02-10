@@ -15,7 +15,7 @@ import string
 from typer import Argument, Option, Typer
 from typing import Annotated
 
-from .config import DEFAULT_CONFIG_PATH, display_config
+from .config import DEFAULT_CONFIG_PATH, display_config, load_user_config
 from .log import error, fail, info, success, warn
 from .sensai import init_sensai
 from .tui import init_tui
@@ -476,7 +476,7 @@ def upload(
         error('Provided path is not a file.')
 
     if remote_path is None:
-        remote_path = Path('/home/hacker')
+        remote_path = Path(load_user_config()['ssh']['project_path'])
 
     file_query = run_cmd(f'file {remote_path}', True)
 
@@ -518,7 +518,7 @@ def hint(
     if account_id is None:
         error('Please login first or run this in the dojo.')
 
-    challenge_data = request('/challenge').json()
+    challenge_data = request('/docker').json()
 
     if challenge:
         error('Not implemented yet, please login via the CLI and start the challenge.')
@@ -547,7 +547,7 @@ def hint(
 
     if list(map(challenge_data.get, ['dojo', 'module', 'challenge', 'practice'])) == [dojo, module, challenge, False]:
         flag_size = get_flag_size()
-        warn('The following information assumes that [bold cyan]/flag[/] has not been tampered with:')
+        warn('The following information assumes that [bold yellow]/flag[/] has not been tampered with:')
         info(f'Excluding the final newline, the flag is {flag_size - 1} characters long.')
         middle_count = flag_size - len(flag_prefix) - len(flag_suffix) - 1
         info(f'You only need to figure out the middle {middle_count} characters of the flag.')
@@ -557,6 +557,7 @@ def hint(
         info(f'Excluding the final newline, the flag is about {len(f'pwn.college{{{fake_flag}}}')} characters long.')
         info(f'You would only need to figure out the middle {fake_flag.index('.')} characters of the flag.')
 
+@app.command('submit', help='An alias for [bold cyan]solve[/].', rich_help_panel='Flag Submission')
 @app.command(short_help='Submit a flag for a challenge.', rich_help_panel='Flag Submission')
 def solve(
     flag: Annotated[str | None, Option('-f', '--flag', help='Flag to submit.')] = None,
@@ -565,9 +566,9 @@ def solve(
     challenge: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None,
 ):
     """
-    Submit a flag for a challenge.
-    If no dojo or no module is given, they are inferred from the challenge ID.
+    Submit a flag for a challenge. Warns if flag is for wrong user or challenge.
 
+    If no dojo or no module is given, they are inferred from the challenge ID.
     If no challenge is given, the flag will be submitted for the current challenge.
     """
 
@@ -596,6 +597,13 @@ def solve(
             challenge_id = request('/active-module', False).json().get('c_current', {}).get('challenge_id')
             if challenge_id is None:
                 error('No active challenge session; start a challenge!')
+
+            if len(flag) != get_flag_size() - 1:
+                warn('This flag is the wrong size! Are you sure you want to submit?')
+                choice = input('(y/N) > ')
+                if choice.strip()[0].lower() != 'y':
+                    warn('Aborting flag submission attempt!')
+                    return
 
         if payload[0] != account_id:
             warn('This flag is from another account! Are you sure you want to submit?')
@@ -635,18 +643,30 @@ def solve(
         module = challenge_data['module']
         challenge = challenge_data['challenge']
 
-    response = request(f'/dojos/{dojo}/{module}/{challenge}/solve', json={'submission': flag})
+    with Session() as session:
+        home_html = request('', False, session=session).text
+        nonce = re.search(r''''csrfNonce': "(\w+)"''', home_html)
+        if nonce:
+            headers = {'CSRF-Token': nonce.group(1)}
+        else:
+            error('Nonce not found.')
+
+        response = request(
+            f'/dojos/{dojo}/{module}/{challenge}/solve',
+            json={'submission': flag},
+            headers=headers,
+            session=session
+        )
 
     if not response.ok and response.status_code != 400:
         error(f'Failed to submit the flag (code: {response.status_code}).')
     result = response.json()
 
     if result['success']:
-        success('The flag is correct!')
         if result['status'] == 'solved':
-            success('You have successfully solved the challenge!')
-        else:
-            info('However, the challenge has already been solved.')
+            success('The flag is correct! You have successfully solved the challenge!')
+        elif result['status'] == 'already_solved':
+            warn('The challenge has already been solved.')
     else:
         fail('The flag is incorrect.')
 
