@@ -1,8 +1,0 @@
-coverage:
-  status:
-    project:
-      default:
-        # basic
-        target: 80%
-        paths:
-          - "pwncollege"

@@ -1,61 +1,66 @@
-# PyPwnCollege
+# Dojo CLI
 
-[![Run Tests](https://github.com/zeeshan12340/pypwncollege/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/zeeshan12340/pypwncollege/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/zeeshan12340/pypwncollege/branch/main/graph/badge.svg)](https://codecov.io/gh/zeeshan12340/pypwncollege)
-[![Documentation Status](https://readthedocs.org/projects/pypwncollege/badge/?version=latest)](https://pypwncollege.readthedocs.io/en/latest/?badge=latest)
-[![PyPI version](https://badge.fury.io/py/PyPwnCollege.svg)](https://badge.fury.io/py/PyPwnCollege)
-[![PyPI Statistics](https://img.shields.io/pypi/dm/pypwncollege.svg)](https://pypistats.org/packages/pypwncollege)
-
-PyPwnCollege is an unofficial Python library to interact with the pwn.college API and website.
+`dojo-cli` is a Python command line interface and package to interact with the pwn.college API and website.
 
 ## Install
 
-```bash
-pip install pypwncollege
+The easiest way to get started is with `uv`.
+
+If you don't have `uv` yet, follow the installation instructions [here](https://docs.astral.sh/uv/getting-started/installation/).
+
+Then run this command to install and launch the CLI:
+```sh
+uvx --from git+https://github.com/hidehiroanto/dojo-cli dojo
 ```
 
-## Demo
-
-> Note: Username/Password is not stored on the system, only the session cookie "app_cookie" is stored in ~/.pwncli.json. Re-login might be needed if that cookie expires.
-
-```py
-from pwncollege import PWNClient
-# Create an API connection
-client = PWNClient(email="user@example.com", password="S3cr3tP455w0rd!")
-# Print the User associated with the client
-print(client.user)
+If you don't want to type that out every time, install it long term with this command:
+```sh
+uv tool install --from git+https://github.com/hidehiroanto/dojo-cli dojo-cli
 ```
 
-## CLI
+Then just run `dojo` to start the CLI.
 
-The library also comes with a CLI to interact with the API which is a work in progress. It is included in the published pip package and should be available in shell.
-
-Basic usage:
-
-```bash
-pwncli --help
-pwncli login -u test1337 -p test1337
-pwncli get --dojos
-pwncli challenge -d fundamentals -m program-misuse -c level-1 -f flag{test}
+If you want to add the Python package to your project environment, run this:
+```sh
+uv add git+https://github.com/hidehiroanto/dojo-cli
 ```
 
-> Note: Not specifying the password on the command line will make pwncli request it like sudo does.
-
-## Documentation
-
-The documentation is available [here](https://pypwncollege.readthedocs.io/en/latest/).
+If you want to add the Python package globally, run this:
+```sh
+uv pip install --break-system-packages --strict --system git+https://github.com/hidehiroanto/dojo-cli
+```
 
 ## Current Features
 
+- Rich text formatting
 - Logging into the API
-- Fetching Dojos, Modules, Challenges
-  - Starting a Challenge
-  - Running an ssh command on a challenge
-  - Submitting flags
-- Getting User details
-- Getting rankings in dojos and modules
+- Generating an SSH keypair and adding the public key to your account
+- Fetching user details
+- Getting rankings in dojos and modules (now with images!)
 - Getting information about belted users
+- Listing the names and descriptions of dojos, modules, and challenges
+- Starting, restarting, and stopping a challenge
+- Checking the status of a challenge
+- Connecting to a challenge with SSH
+- Running a remote command on a challenge
+- Finding the largest files in your home directory
+- Downloading files from and uploading files to the remote server
+- Using the Zed code editor to edit files on the remote server
+- Getting a hint about the flag
+- Submitting flags
+- Talking with SensAI
+- Custom configuration in either JSON or YAML format
+- A TUI to help you navigate all this
+- And more!
 
 ## Contributing
 
 If you find a bug or want to add a feature, feel free to open an issue or a pull request.
+
+## Thanks
+
+Thank you especially to the following people:
+
+- The entire [pwn.college](https://github.com/pwncollege) team for creating the [platform](https://github.com/pwncollege/dojo)
+- [Zeeshan](https://github.com/Zeeshan12340) for letting me fork his [pypwncollege](https://github.com/Zeeshan12340/pypwncollege) repo
+- [COMBAT](https://github.com/TheodorKitzenmaier) for the immediate inspiration

@@ -1,9 +1,0 @@
-requests
-pytest
-python-dotenv
-Sphinx
-sphinx-rtd-theme
-paramiko
-# Static type checking
-mypy
-types-requests
