@@ -4,28 +4,26 @@ This is the main command line interface file.
 
 # TODO: transfer command implementations to utils, create more Python files if needed
 # TODO: add commands for solve stats
-# TODO: replace remote command queries with SFTP equivalents
 # Caveat: this CLI is designed for Linux remote challenges, might work for Mac challenges idk
 
 from getpass import getpass
 from pathlib import Path
-import re
+import os
 from requests import Session
 from rich.markdown import Markdown
 from typer import Argument, Option, Typer
 from typing import Annotated
 
-from .config import DEFAULT_CONFIG_PATH, display_config, load_user_config
+from .config import DEFAULT_CONFIG_PATH, show_config, load_user_config
+from .http import delete_cookie, request, save_cookie
 from .log import error, fail, info, success, warn
+from .remote import run_cmd, ssh_is_dir, ssh_is_file, ssh_keygen, transfer
 from .sensai import init_sensai
 from .tui import init_tui
 from .utils import (
-    delete_cookie, save_cookie,
-    request, get_wechall_rankings,
-    check_challenge_session, parse_challenge_path,
-    is_remote, run_cmd, transfer, ssh_keygen,
-    show_table, get_rank, show_hint, submit_flag,
-    get_belt_color, can_render_image, download_image
+    can_render_image, download_image, get_belt_color,
+    get_rank, get_wechall_rankings, parse_challenge_path,
+    show_hint, show_table, submit_flag
 )
 from .zed import init_zed
 
@@ -47,30 +45,26 @@ def login(
     username: Annotated[str | None, Option('-u', '--username', help='Username or email')] = None,
     password: Annotated[str | None, Option('-p', '--password', help='Password')] = None
 ):
-    """Log into pwn.college account and save session cookie to the cache."""
+    """Log into your pwn.college account and save session cookie to the cache."""
 
     while not username:
         username = input('Enter username or email: ')
     while not password:
-        password = getpass('Enter password: ', echo_char='*')
+        password = getpass('Enter password: ', echo_char=load_user_config()['echo_char'])
 
     with Session() as session:
-        nonce = re.search(r''''csrfNonce': "(\w+)"''', request('', False, False, session=session).text)
-        if nonce:
-            login_data = {'name': username, 'password': password, 'nonce': nonce.group(1)}
-            response = request('/login', False, False, session=session, data=login_data)
+        credentials = {'name': username, 'password': password}
+        response = request('/login', False, False, True, session=session, data=credentials)
 
-            if 'Your username or password is incorrect' in response.text:
-                fail('Login failed.')
-            else:
-                save_cookie({'session': session.cookies.get('session')})
-                success(f'Logged in as user [bold green]{username}[/]!')
+        if 'Your username or password is incorrect' in response.text:
+            fail('Login failed.')
         else:
-            error('Failed to extract nonce.')
+            save_cookie({'session': session.cookies.get('session')})
+            success(f'Logged in as user [bold green]{username}[/]!')
 
 @app.command(rich_help_panel='Account')
 def logout():
-    """Log out of pwn.college account by deleting session cookie from the cache."""
+    """Log out of your pwn.college account by deleting session cookie from the cache."""
 
     delete_cookie()
     success('You have logged out.')
@@ -80,10 +74,11 @@ def logout():
 
 @app.command(rich_help_panel='Account')
 def keygen():
-    """Generate SSH key for the dojo and add it to the account."""
+    """Generate an SSH key for the dojo and add it to the account."""
 
     ssh_keygen()
 
+# TODO: Add belt
 @app.command('profile', help='An alias for [bold cyan]whoami[/].', rich_help_panel='User Info')
 @app.command('me', help='An alias for [bold cyan]whoami[/].', rich_help_panel='User Info')
 @app.command(rich_help_panel='User Info')
@@ -223,7 +218,7 @@ def belts(
         belts = belts[page * 20:][:20]
     show_table(belts, title, ['rank', 'id', 'handle', 'belt', 'website', 'date_ascended'])
 
-# TODO: add solve counts for challenges
+# TODO: add belts/emojis, personal and global solve counts
 @app.command(help='An alias for [bold cyan]list[/].', rich_help_panel='Challenge Info')
 @app.command('list', rich_help_panel='Challenge Info')
 def ls(
@@ -300,11 +295,9 @@ def start(
     If no dojo or no module is given, they are inferred from the challenge ID.
     If no challenge is given, restart the current challenge.
 
+    If both --normal and --privileged are given, --privileged takes precedence.
     If neither --normal nor --privileged are given, start in the current mode if a challenge is running, otherwise start in normal mode.
     """
-
-    if normal and privileged:
-        error('Cannot start challenge in both normal and privileged mode. Please select only one.')
 
     chal_data = request('/docker').json()
 
@@ -312,7 +305,7 @@ def start(
         if chal_data['success']:
             dojo, module, challenge = chal_data['dojo'], chal_data['module'], chal_data['challenge']
         else:
-            error('No active challenge session; please specify a challenge name!')
+            error('No active challenge session; please specify a challenge ID!')
     elif not dojo or not module:
         challenge_path = parse_challenge_path(challenge, chal_data)
         if len(challenge_path) == 3 and all(isinstance(s, str) for s in challenge_path):
@@ -321,7 +314,13 @@ def start(
         else:
             error('Could not parse challenge ID.')
 
-    practice = privileged or not normal or chal_data.get('practice', False)
+    if privileged:
+        practice = True
+    elif normal:
+        practice = False
+    else:
+        practice = chal_data.get('practice', False)
+
     request_json = {'dojo': dojo, 'module': module, 'challenge': challenge, 'practice': practice}
     response = request('/docker', csrf=True, json=request_json).json()
     if response.get('success'):
@@ -336,9 +335,9 @@ def start_next(
     normal: Annotated[bool, Option('-n', '--normal', help='Start in normal mode.')] = False,
     privileged: Annotated[bool, Option('-p', '--practice', '--privileged', help='Start in privileged mode.')] = False
 ):
-    """Start next challenge in the module."""
+    """Start the next challenge in the current module."""
 
-    if not check_challenge_session():
+    if not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
 
     active_module = request('/active-module', False)
@@ -357,9 +356,9 @@ def previous(
     normal: Annotated[bool, Option('-n', '--normal', help='Start in normal mode.')] = False,
     privileged: Annotated[bool, Option('-p', '--practice', '--privileged', help='Start in privileged mode.')] = False
 ):
-    """Start previous challenge in the module."""
+    """Start the previous challenge in the current module."""
 
-    if not check_challenge_session():
+    if not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
 
     active_module = request('/active-module', False)
@@ -379,7 +378,7 @@ def restart(
 ):
     """Restart the current challenge. This will restart in the current mode by default."""
 
-    if not check_challenge_session():
+    if not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
 
     start(normal=normal, privileged=privileged)
@@ -406,18 +405,18 @@ def status():
     """Show the status of the current challenge."""
 
     response = request('/docker').json()
-    if response['success']:
+    if response.get('success'):
         response.pop('success')
         show_table(response, 'Challenge Status')
     else:
-        fail(response['error'])
+        fail(response.get('error'))
 
 @app.command('ssh', help='An alias for [bold cyan]connect[/].', rich_help_panel='Remote Connection')
 @app.command(rich_help_panel='Remote Connection')
 def connect():
     """Connect to the current challenge via an interactive remote shell."""
 
-    run_cmd()
+    run_cmd(client='openssh')
 
 @app.command(help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Connection')
 @app.command('exec', rich_help_panel='Remote Connection')
@@ -426,7 +425,7 @@ def run(
 ):
     """Execute a remote command. If no command is given, start a shell like [bold cyan]connect[/]."""
 
-    run_cmd(command)
+    run_cmd(command, client='openssh')
 
 @app.command(rich_help_panel='Remote Connection')
 def du(
@@ -435,7 +434,7 @@ def du(
 ):
     """List the largest files in a directory, using [bold cyan]du[/]. Helpful when clearing up space."""
 
-    run_cmd(f'find {path or '~'} -type f -exec du -hs {{}} + 2>/dev/null | sort -hr | head -n {count}')
+    run_cmd(f'find {path or '~'} -type f -exec du -hs {{}} + 2>/dev/null | sort -hr | head -n {count}', client='openssh')
 
 @app.command(rich_help_panel='Remote Connection')
 def dust(
@@ -444,7 +443,7 @@ def dust(
 ):
     """List the largest files in a directory, using [bold cyan]dust[/]. Helpful when clearing up space."""
 
-    run_cmd(f'dust -CFprx -n {count} {path or '~'} 2>/dev/null')
+    run_cmd(f'dust -CFprx -n {count} {path or '~'} 2>/dev/null', client='openssh')
 
 @app.command('down', help='An alias for [bold cyan]download[/].', rich_help_panel='Remote Transfer')
 @app.command(rich_help_panel='Remote Transfer')
@@ -452,17 +451,16 @@ def download(
     remote_path: Annotated[Path, Argument(help='Path of remote file.')],
     local_path: Annotated[Path | None, Argument(help='Path of local directory or file.')] = None
 ):
-    """Download a file from remote to local. By default, it downloads the file to the current working directory."""
+    """
+    Download a file from remote to local.
+    By default, it downloads the file to the current working directory.
+    """
 
-    if is_remote():
+    if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
 
-    file_query = run_cmd(f'file {remote_path}', True)
-    if file_query:
-        if b'(No such file or directory)' in file_query or file_query.split()[-1] == b'directory':
-            error('Remote path is not a file.')
-    else:
-        error('Could not query file.')
+    if not ssh_is_file(remote_path):
+        error('Remote path is not a file.')
 
     if not local_path:
         local_path = Path.cwd()
@@ -472,7 +470,7 @@ def download(
     if local_path.is_dir():
         local_path /= remote_path.name
 
-    transfer(str(remote_path), str(local_path))
+    transfer(remote_path, local_path)
     success(f'Downloaded {remote_path} to {local_path}')
 
 @app.command('up', help='An alias for [bold cyan]upload[/].', rich_help_panel='Remote Transfer')
@@ -481,9 +479,12 @@ def upload(
     local_path: Annotated[Path, Argument(help='Path of local file.')],
     remote_path: Annotated[Path | None, Argument(help='Path of remote directory or file.')] = None,
 ):
-    """Upload a file from local to remote. By default, it uploads the file to [bold yellow]/home/hacker[/]."""
+    """
+    Upload a file from local to remote.
+    By default, it uploads the file to the configured SSH project path.
+    """
 
-    if is_remote():
+    if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
 
     local_path = local_path.expanduser()
@@ -491,20 +492,17 @@ def upload(
     if not local_path.is_file():
         error('Provided path is not a file.')
 
-    if remote_path is None:
+    if not remote_path:
         remote_path = Path(load_user_config()['ssh']['project_path'])
 
-    file_query = run_cmd(f'file {remote_path}', True)
-
-    if file_query is None:
-        error('Could not query file.')
-    else:
-        if b'(No such file or directory)' in file_query:
-            run_cmd(f'mkdir -p {remote_path.parent}')
-        elif file_query.split()[-1] == b'directory':
+    if not ssh_is_file(remote_path):
+        if ssh_is_dir(remote_path):
             remote_path /= local_path.name
+        elif not ssh_is_dir(remote_path.parent):
+            # ssh_mkdir(remote_path.parent)
+            run_cmd(f'mkdir -p {remote_path.parent}')
 
-    transfer(str(local_path), str(remote_path), True)
+    transfer(local_path, remote_path, True)
     success(f'Uploaded {local_path} to {remote_path}')
 
 @app.command(rich_help_panel='Remote Connection')
@@ -550,11 +548,11 @@ def solve(
 
 @app.command(rich_help_panel='Configuration')
 def config(
-    default: Annotated[bool, Option('-d', '--default', help='Show the default configuration instead.')] = False
+    show_default: Annotated[bool, Option('-d', '--default', help='Show the default configuration instead.')] = False
 ):
     """Show the current configuration settings."""
 
-    display_config(default)
+    show_config(show_default)
 
 @app.command(rich_help_panel='Help')
 def help():

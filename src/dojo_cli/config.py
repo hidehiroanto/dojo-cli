@@ -23,6 +23,7 @@ DEFAULT_CONFIG = {
         'black': '#111111'
     },
     'cookie_path': '~/.cache/dojo-cli/cookie.json',
+    'echo_char': '*',
     'log_styles': {
         'error': 'on red',
         'fail': 'bold red',
@@ -102,5 +103,5 @@ def load_user_config() -> dict:
         user_config = deepmerge(DEFAULT_CONFIG, load_config(config_path))
     return user_config
 
-def display_config(default: bool = False):
-    rprint(json.dumps(DEFAULT_CONFIG if default else load_user_config(), indent=4))
+def show_config(show_default: bool = False):
+    rprint(json.dumps(DEFAULT_CONFIG if show_default else load_user_config(), indent=4))

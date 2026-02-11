@@ -9,11 +9,11 @@ from rich.markdown import Markdown
 from socketio import SimpleClient
 
 from .config import load_user_config
+from .http import load_cookie, request
 from .log import error, info
-from .utils import check_challenge_session, load_cookie
 
 def init_sensai():
-    if not check_challenge_session():
+    if not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
 
     user_config = load_user_config()

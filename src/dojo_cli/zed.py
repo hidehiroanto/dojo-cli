@@ -5,6 +5,7 @@ Handles installing, updating, and launching Zed. I've only tested this on Mac OS
 from io import BytesIO
 import gzip
 import json
+import os
 from pathlib import Path
 from shutil import which
 import requests
@@ -14,8 +15,9 @@ import tarfile
 import tempfile
 
 from .config import load_user_config
+from .http import request
 from .log import error, info, success
-from .utils import check_challenge_session, is_remote, run_cmd, transfer
+from .remote import run_cmd, ssh_listdir, ssh_remove, transfer
 
 # use zerobrew or wax instead of homebrew?
 def homebrew_upgrade(formulae: list):
@@ -92,8 +94,7 @@ def check_lang_server_settings():
 
 def upload_lang_server(lang_server: str, home_dir: Path = Path('/home/hacker')):
     lang_dir = home_dir / '.local' / 'share' / 'zed' / 'languages'
-    ls_query = run_cmd(f'ls -l {lang_dir / lang_server}', True)
-    versions = [line.split()[-1].decode() for line in (ls_query or b'').splitlines()[1:]]
+    versions = ssh_listdir(lang_dir / lang_server)
     latest = requests.get(f'https://api.github.com/repos/astral-sh/{lang_server}/releases/latest').json()
 
     info(f'Installed versions of {lang_server}: {versions}')
@@ -114,7 +115,8 @@ def upload_lang_server(lang_server: str, home_dir: Path = Path('/home/hacker')):
             tar_member = tar.extractfile(tar.getmember(f'{arch}/{lang_server}'))
             lang_server_data = tar_member.read() if tar_member else b''
 
-        if versions:
+        for version in versions:
+            # ssh_rmdir(lang_dir / lang_server / version)
             run_cmd(f'rm -r {lang_dir / lang_server / '*'}')
         run_cmd(f'mkdir -p {lang_server_dir}')
 
@@ -127,17 +129,15 @@ def upload_lang_server(lang_server: str, home_dir: Path = Path('/home/hacker')):
         success(f'Updated {lang_server} to version {latest['name']}')
 
 def upload_zed_server(use_lang_servers: bool = False):
-    if is_remote():
+    if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
-    if not check_challenge_session():
+    if not request('/docker').json().get('success'):
         error('Challenge is not running, start a challenge first.')
 
     echo_query = run_cmd('echo $HOME', True)
     home_dir = Path((echo_query or b'/home/hacker').strip().decode())
     zed_server_dir = home_dir / '.zed_server'
-
-    ls_query = run_cmd(f'ls -l {zed_server_dir}', True)
-    zed_versions = [line.split()[-1].decode() for line in (ls_query or b'').splitlines()[1:]]
+    zed_versions = ssh_listdir(zed_server_dir)
 
     if sys.platform in ['darwin', 'linux']:
         zed_cli = Path(which('zed') or '~/.local/bin/zed').expanduser()
@@ -173,8 +173,8 @@ def upload_zed_server(use_lang_servers: bool = False):
         zed_asset = next(asset for asset in zed_release['assets'] if zed_arch in asset['browser_download_url'])
         zed_server_data = gzip.decompress(requests.get(zed_asset['browser_download_url']).content)
 
-        if zed_versions:
-            run_cmd(f'rm {zed_server_dir / 'zed-remote-server-stable-*'}')
+        for version in zed_versions:
+            ssh_remove(zed_server_dir / version)
 
         with tempfile.NamedTemporaryFile() as f:
             Path(f.name).chmod(0o755)
@@ -190,8 +190,8 @@ def upload_zed_server(use_lang_servers: bool = False):
 
 def run_zed_client():
     ssh_config = load_user_config()['ssh']
-    ssh_config_file = Path(ssh_config['config_file'])
-    ssh_identity_file = Path(ssh_config['IdentityFile'])
+    ssh_config_file = Path(ssh_config['config_file']).expanduser()
+    ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser()
 
     zed = Path(which('zed') or '~/.local/bin/zed').expanduser()
     if not zed.is_file():
@@ -221,17 +221,17 @@ def run_zed_client():
 
         zed_argv = [
             zed,
-            f'ssh://{ssh_config['User']}@{ssh_config['HostName']}:{ssh_config['Port']}/{ssh_config['project_path']}'
+            f'ssh://{ssh_config['User']}@{ssh_config['HostName']}:{ssh_config['Port']}{ssh_config['project_path']}'
         ]
     else:
-        error('Something went wrong with ssh config or the ssh identity file, please make sure at least one is valid.')
+        error('Something went wrong with the SSH config file or the SSH key, please make sure at least one is valid.')
 
     subprocess.run(zed_argv)
 
 def init_zed(upgrade_zed: bool = False, use_lang_servers: bool = False):
-    if is_remote():
+    if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
-    if not check_challenge_session():
+    if not request('/docker').json().get('success'):
         error('Challenge is not running, start a challenge first.')
 
     if upgrade_zed:
