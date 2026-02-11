@@ -14,14 +14,14 @@ from requests import Session
 from rich import box, print as rprint
 from rich.table import Column, Table
 from rich.text import Text
-from scp import SCPClient
 from shutil import which
+import string
 import subprocess
 from typing import Any
 
 from .config import load_user_config
 from .constants import DOJO_AUTH_TOKEN, FLAG_PATH, TERM, TERM_PROGRAM
-from .log import error, info, success, warn
+from .log import error, fail, info, success, warn
 
 if TERM_PROGRAM not in ['Apple_Terminal']:
     from textual_image.renderable import Image, SixelImage, TGPImage
@@ -76,7 +76,7 @@ def save_cookie(cookie_jar: dict):
     cookie_path.parent.mkdir(parents=True, exist_ok=True)
     cookie_path.write_text(json.dumps(cookie_jar))
 
-def request(url: str, api: bool = True, auth: bool = True, **kwargs):
+def request(url: str, api: bool = True, auth: bool = True, csrf: bool = False, **kwargs):
     user_config = load_user_config()
     session = kwargs.pop('session', Session())
     method = 'POST' if 'data' in kwargs or 'json' in kwargs else 'GET'
@@ -88,7 +88,9 @@ def request(url: str, api: bool = True, auth: bool = True, **kwargs):
 
     if auth:
         cookie_path = Path(user_config['cookie_path']).expanduser()
-        if cookie_path.is_file():
+        if is_remote() and deserialize_auth_token(DOJO_AUTH_TOKEN):
+            headers['Authorization'] = f'Bearer {DOJO_AUTH_TOKEN}'
+        elif cookie_path.is_file():
             cookie_jar = load_cookie(cookie_path)
             if cookie_jar:
                 headers['Cookie'] = f'session={cookie_jar['session']}'
@@ -96,10 +98,15 @@ def request(url: str, api: bool = True, auth: bool = True, **kwargs):
                     error('Session expired, please login again.')
             else:
                 error('Something went wrong loading the cookie jar.')
-        elif is_remote() and deserialize_auth_token(DOJO_AUTH_TOKEN):
-            headers['Authorization'] = f'Bearer {DOJO_AUTH_TOKEN}'
         else:
             error('Request is not authorized, please login or run this in the dojo.')
+
+    if csrf:
+        nonce = re.search(r''''csrfNonce': "(\w+)"''', session.get(base_url, headers=headers).text)
+        if nonce:
+            headers['CSRF-Token'] = nonce.group(1)
+        else:
+            error('Failed to extract nonce.')
 
     try:
         return session.request(method, url, headers=headers, **kwargs)
@@ -134,21 +141,31 @@ def get_wechall_rankings(page: int = 1, simple: bool = False):
 
     return wechall_data
 
+def get_challenge_id(dojo: str, module: str, challenge: str) -> int:
+    response = request(f'/{dojo}/{module}', False, False)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    challenges = soup.find_all('div', class_='challenge-init')
+    for challenge_div in challenges:
+        if challenge_div.find('input', id='challenge')['value'] == challenge:
+            return int(challenge_div.find('input', id='challenge-id')['value'])
+    return -1
+
 def check_challenge_session() -> bool:
     return request('/docker').json().get('success')
 
 def is_remote() -> bool:
     return DOJO_AUTH_TOKEN.startswith('sk-workspace-local-')
 
-def parse_challenge_path(challenge: str, challenge_data: dict = {}) -> list:
+def parse_challenge_path(challenge: str, challenge_data: dict = {}) -> tuple:
     if re.fullmatch(r'[\-\w]+', challenge):
         if not challenge_data:
             challenge_data = request('/docker').json()
         if challenge_data.get('success'):
-            return [challenge_data.get('dojo'), challenge_data.get('module'), challenge]
-        return []
+            return challenge_data.get('dojo'), challenge_data.get('module'), challenge
+        return tuple()
 
-    return re.findall(r'/([\-~\w]+)/([\-\w]+)/([\-\w]+)', challenge)
+    result = re.findall(r'/?([\-\~\w]+)/([\-\w]+)/([\-\w]+)', challenge)
+    return result[0] if result else tuple()
 
 def ssh_keygen():
     if is_remote():
@@ -164,8 +181,7 @@ def ssh_keygen():
 
     if ssh_identity_file.is_file():
         warn(f'Identity file already exists at {ssh_identity_file}, override?')
-        choice = input('(y/N) > ')
-        if choice.strip()[0].lower() != 'y':
+        if input('(y/N) > ').strip()[0].lower() != 'y':
             warn('Aborting SSH key generation!')
             return
 
@@ -270,7 +286,7 @@ def run_cmd(command: str | None = None, capture_output: bool = False, payload: b
     else:
         error('Unsupported remote connection mode.')
 
-def transfer(src_path: Path | str, dst_path: Path | str, upload: bool = False, mode: str = 'paramiko'):
+def transfer(src_path: str, dst_path: str, upload: bool = False, mode: str = 'paramiko'):
     if is_remote():
         error('Please run this locally instead of on the dojo.')
     if not check_challenge_session():
@@ -290,8 +306,8 @@ def transfer(src_path: Path | str, dst_path: Path | str, upload: bool = False, m
                 ssh_config['User'],
                 key_filename=str(ssh_identity_file)
             )
-            with SCPClient(ssh_client.get_transport()) as scp_client:
-                getattr(scp_client, 'put' if upload else 'get')(src_path, dst_path)
+            with ssh_client.open_sftp() as sftp_client:
+                getattr(sftp_client, 'put' if upload else 'get')(src_path, dst_path)
 
     elif mode == 'scp':
         scp_client = Path(which('scp') or '/usr/bin/scp')
@@ -366,7 +382,7 @@ def get_box(s: str) -> box.Box | None:
     if len(lines) == 8 and all(len(line) == 4 for line in lines):
         return box.Box(s)
 
-def display_table(table_data: dict[str, Any] | list[dict[str, Any]], title: str | None = None, keys: list[str] | None = None):
+def show_table(table_data: dict[str, Any] | list[dict[str, Any]], title: str | None = None, keys: list[str] | None = None):
     if isinstance(table_data, dict):
         table_data = [table_data]
     if not keys:
@@ -406,3 +422,127 @@ def download_image(url: str, image_type: str | None = None):
 
     aspect_ratios = {'belt': 6, 'flag': 3, 'symbol': 2}
     return Image(BytesIO(image), aspect_ratios.get(image_type, 2), 1)
+
+def get_challenge_info(dojo: str | None = None, module: str | None = None, challenge: str | None = None):
+    account_id = request('/users/me').json().get('id')
+    if account_id is None:
+        error('Please login first or run this in the dojo.')
+
+    chal_data = request('/docker').json()
+
+    if challenge:
+        if not dojo or not module:
+            challenge_path = parse_challenge_path(challenge, chal_data)
+            if len(challenge_path) == 3 and all(isinstance(s, str) for s in challenge_path):
+                dojo, module, challenge = challenge_path
+            else:
+                error('Invalid challenge ID.')
+                return
+
+        # verify that this challenge exists?
+        challenge_id = get_challenge_id(dojo, module, challenge)
+    else:
+        if chal_data['success']:
+            dojo, module, challenge = chal_data['dojo'], chal_data['module'], chal_data['challenge']
+        else:
+            error('No active challenge session; please start a challenge or specify a challenge name!')
+            return
+
+        active_module = request('/active-module', False)
+        if active_module.is_redirect:
+            challenge_id = get_challenge_id(dojo, module, challenge)
+        else:
+            challenge_id = active_module.json().get('c_current', {}).get('challenge_id', -1)
+
+    return (dojo, module, challenge), (account_id, challenge_id)
+
+def show_hint(dojo: str | None = None, module: str | None = None, challenge: str | None = None):
+    (dojo, module, challenge), (account_id, challenge_id) = get_challenge_info(dojo, module, challenge)
+
+    fake_flag = serialize_flag(account_id, challenge_id)
+    flag_prefix = 'pwn.college{'
+    flag_suffix = fake_flag[fake_flag.index('.'):] + '}'
+    info(f'The flag starts with: [bold cyan]{flag_prefix}[/]')
+    info(f'The flag ends with: [bold cyan]{flag_suffix}[/]')
+    flag_chars = ''.join(sorted(string.digits + string.ascii_letters + '-_'))
+    info(f'The middle of the flag can only be these characters: [bold cyan]{flag_chars}[/]')
+
+    chal_data = request('/docker').json()
+    if list(map(chal_data.get, ['dojo', 'module', 'challenge', 'practice'])) == [dojo, module, challenge, False]:
+        flag_length = get_flag_size() - 1
+        warn('The following information assumes that [bold yellow]/flag[/] has not been tampered with:')
+        info(f'Excluding the final newline, the flag is {flag_length} characters long.')
+        middle_count = flag_length - len(flag_prefix) - len(flag_suffix)
+        info(f'You only need to figure out the middle {middle_count} characters of the flag.')
+
+    else:
+        flag_length = len(f'pwn.college{{{fake_flag}}}')
+        warn('You are not running the correct challenge in normal mode, so the real flag size cannot be measured.')
+        info(f'Excluding the final newline, the flag is about {flag_length} characters long.')
+        info(f'You would only need to figure out the middle {fake_flag.index('.')} characters of the flag.')
+
+def submit_flag(flag: str | None = None, dojo: str | None = None, module: str | None = None, challenge: str | None = None):
+    while not flag:
+        flag = input('Enter the flag: ').strip()
+
+    if flag in ['practice', 'pwn.college{practice}']:
+        warn('This is the practice flag!')
+        info('Restart the challenge in normal mode to get the real flag.')
+        info('(You can do this with [bold]dojo restart [green]-n[/][/])')
+        return
+
+    (dojo, module, challenge), (account_id, challenge_id) = get_challenge_info(dojo, module, challenge)
+    payload = deserialize_flag(flag)
+
+    if isinstance(payload, list) and len(payload) == 2 and all(isinstance(i, int) for i in payload):
+        if payload[0] != account_id:
+            warn('This flag is from another account! Are you sure you want to submit?')
+            if input('(y/N) > ').strip()[0].lower() != 'y':
+                warn('Aborting flag submission attempt!')
+                return
+
+        if payload[1] != challenge_id:
+            warn('This flag is from another challenge! Are you sure you want to submit?')
+            if input('(y/N) > ').strip()[0].lower() != 'y':
+                warn('Aborting flag submission attempt!')
+                return
+
+        chal_data = request('/docker').json()
+        if list(map(chal_data.get, ['dojo', 'module', 'challenge', 'practice'])) == [dojo, module, challenge, False]:
+            flag_length = get_flag_size() - 1
+        else:
+            flag_length = len(f'pwn.college{{{serialize_flag(account_id, challenge_id)}}}')
+
+        full_flag_mismatch = re.fullmatch(r'pwn.college{[\-\.\w]+}', flag) and len(flag) != flag_length
+        partial_flag_mismatch = re.fullmatch(r'[\-\.\w]+', flag) and len(flag) != flag_length - len('pwn.college{}')
+        if full_flag_mismatch or partial_flag_mismatch:
+            warn(f'This flag is the wrong size! The real flag length is {flag_length}. Are you sure you want to submit?')
+            if input('(y/N) > ').strip()[0].lower() != 'y':
+                warn('Aborting flag submission attempt!')
+                return
+
+    else:
+        warn('Could not deserialize flag. Are you sure you want to submit?')
+        if input('(y/N) > ').strip()[0].lower() != 'y':
+            warn('Aborting flag submission attempt!')
+            return
+
+    info(f'Submitting the flag: {flag}')
+
+    response = request(
+        f'/dojos/{dojo}/{module}/{challenge}/solve',
+        csrf=not is_remote(),
+        json={'submission': flag}
+    )
+
+    if not response.ok and response.status_code != 400:
+        error(f'Failed to submit the flag (code: {response.status_code}).')
+    result = response.json()
+
+    if result['success']:
+        if result['status'] == 'solved':
+            success('The flag is correct! You have successfully solved the challenge!')
+        elif result['status'] == 'already_solved':
+            warn('The challenge has already been solved.')
+    else:
+        fail('The flag is incorrect.')

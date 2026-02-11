@@ -4,6 +4,7 @@ This is the main command line interface file.
 
 # TODO: transfer command implementations to utils, create more Python files if needed
 # TODO: add commands for solve stats
+# TODO: replace remote command queries with SFTP equivalents
 # Caveat: this CLI is designed for Linux remote challenges, might work for Mac challenges idk
 
 from getpass import getpass
@@ -11,7 +12,6 @@ from pathlib import Path
 import re
 from requests import Session
 from rich.markdown import Markdown
-import string
 from typer import Argument, Option, Typer
 from typing import Annotated
 
@@ -24,8 +24,7 @@ from .utils import (
     request, get_wechall_rankings,
     check_challenge_session, parse_challenge_path,
     is_remote, run_cmd, transfer, ssh_keygen,
-    get_flag_size, serialize_flag, deserialize_flag,
-    display_table, get_rank,
+    show_table, get_rank, show_hint, submit_flag,
     get_belt_color, can_render_image, download_image
 )
 from .zed import init_zed
@@ -56,11 +55,10 @@ def login(
         password = getpass('Enter password: ', echo_char='*')
 
     with Session() as session:
-        login_html = request('/login', False, False, session=session).text
-        nonce = re.search(r''''csrfNonce': "(\w+)"''', login_html)
+        nonce = re.search(r''''csrfNonce': "(\w+)"''', request('', False, False, session=session).text)
         if nonce:
-            data = {'name': username, 'password': password, 'nonce': nonce.group(1)}
-            response = request('/login', False, False, session=session, data=data)
+            login_data = {'name': username, 'password': password, 'nonce': nonce.group(1)}
+            response = request('/login', False, False, session=session, data=login_data)
 
             if 'Your username or password is incorrect' in response.text:
                 fail('Login failed.')
@@ -68,7 +66,7 @@ def login(
                 save_cookie({'session': session.cookies.get('session')})
                 success(f'Logged in as user [bold green]{username}[/]!')
         else:
-            error('Nonce not found.')
+            error('Failed to extract nonce.')
 
 @app.command(rich_help_panel='Account')
 def logout():
@@ -105,7 +103,7 @@ def whoami():
 
     info(f'You are the epic hacker [bold green]{account['name']}[/]!')
     keys = ['rank', 'id', 'handle', 'email', 'website', 'affiliation', 'country', 'bracket', 'score']
-    display_table(account, 'Account Info', keys)
+    show_table(account, 'Account Info', keys)
 
 @app.command('score', help='An alias for [bold cyan]whois[/].', rich_help_panel='User Info')
 @app.command('rank', help='An alias for [bold cyan]whois[/].', rich_help_panel='User Info')
@@ -124,11 +122,11 @@ def whois(
 
     score = request('/score', auth=False, params={'username': username}).json()
     fields = list(map(int, score.split(':')))
-    account = {}
-    account['rank'] = f'[bold green]{get_rank(fields[0])}/{fields[5]}[/]'
-    account['handle'] = f'[bold green]{username}[/]'
-    account['score'] = f'[bold cyan]{fields[1]}/{fields[2]}[/]'
-    display_table(account, 'Global ranking')
+    show_table({
+        'rank': f'[bold green]{get_rank(fields[0])}/{fields[5]}[/]',
+        'handle': f'[bold green]{username}[/]',
+        'score': f'[bold cyan]{fields[1]}/{fields[2]}[/]'
+    }, 'Global ranking')
 
 @app.command(rich_help_panel='User Info')
 def scoreboard(
@@ -169,10 +167,10 @@ def scoreboard(
                 row['role'] = 'ASU Student' if symbol == 'fork' else symbol.title()
 
         title = f'Scoreboard for [bold]{f'{dojo}/{module}' if module else dojo}[/]'
-        display_table(standings, title, ['rank', 'role', 'handle', 'belt', 'badges', 'solves'])
+        show_table(standings, title, ['rank', 'role', 'handle', 'belt', 'badges', 'solves'])
 
     else:
-        display_table(get_wechall_rankings(page, simple), 'WeChall rankings')
+        show_table(get_wechall_rankings(page, simple), 'WeChall rankings')
 
 @app.command(rich_help_panel='User Info')
 def belts(
@@ -223,7 +221,7 @@ def belts(
 
     if page is not None:
         belts = belts[page * 20:][:20]
-    display_table(belts, title, ['rank', 'id', 'handle', 'belt', 'website', 'date_ascended'])
+    show_table(belts, title, ['rank', 'id', 'handle', 'belt', 'website', 'date_ascended'])
 
 # TODO: add solve counts for challenges
 @app.command(help='An alias for [bold cyan]list[/].', rich_help_panel='Challenge Info')
@@ -275,7 +273,7 @@ def ls(
         table_data['name'] = f'[bold green]{table_data['name']}[/]'
         table_data['description'] = Markdown(table_data['description'] or 'N/A')
 
-    display_table(table_data, table_title, ['id', 'name', 'description'])
+    show_table(table_data, table_title, ['id', 'name', 'description'])
 
 # @app.command(rich_help_panel='Challenge Info')
 def tree(
@@ -308,22 +306,30 @@ def start(
     if normal and privileged:
         error('Cannot start challenge in both normal and privileged mode. Please select only one.')
 
-    challenge_data = request('/docker').json()
+    chal_data = request('/docker').json()
 
     if not challenge:
-        dojo = challenge_data.get('dojo')
-        module = challenge_data.get('module')
-        challenge = challenge_data.get('challenge')
+        if chal_data['success']:
+            dojo, module, challenge = chal_data['dojo'], chal_data['module'], chal_data['challenge']
+        else:
+            error('No active challenge session; please specify a challenge name!')
     elif not dojo or not module:
-        challenge_path = parse_challenge_path(challenge, challenge_data)
+        challenge_path = parse_challenge_path(challenge, chal_data)
         if len(challenge_path) == 3 and all(isinstance(s, str) for s in challenge_path):
             # TODO: confirm this challenge actually exists
             dojo, module, challenge = challenge_path
         else:
             error('Could not parse challenge ID.')
 
-    practice = privileged or not normal or challenge_data.get('practice', False)
-    request('/docker', json={'dojo': dojo, 'module': module, 'challenge': challenge, 'practice': practice})
+    practice = privileged or not normal or chal_data.get('practice', False)
+    request_json = {'dojo': dojo, 'module': module, 'challenge': challenge, 'practice': practice}
+    response = request('/docker', csrf=True, json=request_json).json()
+    if response.get('success'):
+        success('Challenge started successfully!')
+    elif response.get('error'):
+        error(response['error'])
+    else:
+        error('Failed to start challenge.')
 
 @app.command('next', rich_help_panel='Challenge Launch')
 def start_next(
@@ -335,7 +341,11 @@ def start_next(
     if not check_challenge_session():
         error('No active challenge session; start a challenge!')
 
-    c_next = request('/active-module', False).json().get('c_next')
+    active_module = request('/active-module', False)
+    if active_module.is_redirect:
+        error('Please login first.')
+
+    c_next = active_module.json().get('c_next')
     if c_next:
         start(c_next['dojo_reference_id'], c_next['module_id'], c_next['challenge_reference_id'], normal, privileged)
     else:
@@ -352,7 +362,11 @@ def previous(
     if not check_challenge_session():
         error('No active challenge session; start a challenge!')
 
-    c_previous = request('/active-module', False).json().get('c_previous')
+    active_module = request('/active-module', False)
+    if active_module.is_redirect:
+        error('Please login first.')
+
+    c_previous = active_module.json().get('c_previous')
     if c_previous:
         start(c_previous['dojo_reference_id'], c_previous['module_id'], c_previous['challenge_reference_id'], normal, privileged)
     else:
@@ -376,9 +390,11 @@ def stop():
     """Stop the current challenge. Only works in privileged mode for now."""
 
     response = request('/docker').json()
-    if response['success']:
-        if response['practice']:
-            run_cmd('sudo kill 1')
+    if response.get('success'):
+        if response.get('practice'):
+            run_cmd('sudo kill 1', True)
+            if not request('/docker').json().get('success'):
+                success('Challenge stopped successfully!')
         else:
             error('Challenge is in normal mode, cannot stop container without root privileges.')
     else:
@@ -392,7 +408,7 @@ def status():
     response = request('/docker').json()
     if response['success']:
         response.pop('success')
-        display_table(response, 'Challenge Status')
+        show_table(response, 'Challenge Status')
     else:
         fail(response['error'])
 
@@ -417,7 +433,7 @@ def du(
     path: Annotated[Path | None, Option('-p', '--path', help='Path to list files from.')] = None,
     count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20
 ):
-    """List the largest files in a directory, using du. Helpful when clearing up space."""
+    """List the largest files in a directory, using [bold cyan]du[/]. Helpful when clearing up space."""
 
     run_cmd(f'find {path or '~'} -type f -exec du -hs {{}} + 2>/dev/null | sort -hr | head -n {count}')
 
@@ -426,7 +442,7 @@ def dust(
     path: Annotated[Path | None, Option('-p', '--path', help='Path to list files from.')] = None,
     count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20
 ):
-    """List the largest files in a directory, using dust. Helpful when clearing up space."""
+    """List the largest files in a directory, using [bold cyan]dust[/]. Helpful when clearing up space."""
 
     run_cmd(f'dust -CFprx -n {count} {path or '~'} 2>/dev/null')
 
@@ -456,7 +472,7 @@ def download(
     if local_path.is_dir():
         local_path /= remote_path.name
 
-    transfer(remote_path, local_path)
+    transfer(str(remote_path), str(local_path))
     success(f'Downloaded {remote_path} to {local_path}')
 
 @app.command('up', help='An alias for [bold cyan]upload[/].', rich_help_panel='Remote Transfer')
@@ -488,7 +504,7 @@ def upload(
         elif file_query.split()[-1] == b'directory':
             remote_path /= local_path.name
 
-    transfer(local_path, remote_path, True)
+    transfer(str(local_path), str(remote_path), True)
     success(f'Uploaded {local_path} to {remote_path}')
 
 @app.command(rich_help_panel='Remote Connection')
@@ -500,62 +516,20 @@ def zed(
 
     init_zed(upgrade_zed, use_lang_servers)
 
-# TODO: add ability to get a flag hint for a challenge that is not the current one
-@app.command(short_help="Get a hint for a challenge's flag.", rich_help_panel='Flag Submission')
+@app.command(short_help="Show a hint for a challenge's flag.", rich_help_panel='Flag Submission')
 def hint(
     dojo: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
     module: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
     challenge: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None
 ):
     """
-    Get a hint for a challenge's flag.
+    Show a hint for a challenge's flag.
     If no dojo or no module is given, they are inferred from the challenge ID.
 
     If no challenge is given, the hint will be provided for the current challenge's flag.
     """
 
-    account_id = request('/users/me').json().get('id')
-    if account_id is None:
-        error('Please login first or run this in the dojo.')
-
-    challenge_data = request('/docker').json()
-
-    if challenge:
-        error('Not implemented yet, please login via the CLI and start the challenge.')
-        if not dojo or not module:
-            challenge_path = parse_challenge_path(challenge, challenge_data)
-            if len(challenge_path) == 3 and all(isinstance(s, str) for s in challenge_path):
-                dojo, module, challenge = challenge_path
-            else:
-                error('Invalid challenge ID.')
-        # challenge_id = get_challenge_id(dojo, module, challenge)
-    else:
-        dojo, module, challenge = challenge_data['dojo'], challenge_data['module'], challenge_data['challenge']
-        # TODO: change /docker to output challenge_id instead of relying on /active-module which requires session cookie
-        # challenge_id = request('/docker').json().get('challenge_id')
-        challenge_id = request('/active-module', False).json().get('c_current', {}).get('challenge_id')
-        if challenge_id is None:
-            error('No active challenge session; start a challenge!')
-
-    fake_flag = serialize_flag(account_id, challenge_id)
-    flag_prefix = 'pwn.college{'
-    flag_suffix = fake_flag[fake_flag.index('.'):] + '}'
-    info(f'The flag starts with: [bold cyan]{flag_prefix}[/]')
-    info(f'The flag ends with: [bold cyan]{flag_suffix}[/]')
-    flag_chars = ''.join(sorted(string.digits + string.ascii_letters + '-_'))
-    info(f'The middle of the flag can only be these characters: [bold cyan]{flag_chars}[/]')
-
-    if list(map(challenge_data.get, ['dojo', 'module', 'challenge', 'practice'])) == [dojo, module, challenge, False]:
-        flag_size = get_flag_size()
-        warn('The following information assumes that [bold yellow]/flag[/] has not been tampered with:')
-        info(f'Excluding the final newline, the flag is {flag_size - 1} characters long.')
-        middle_count = flag_size - len(flag_prefix) - len(flag_suffix) - 1
-        info(f'You only need to figure out the middle {middle_count} characters of the flag.')
-
-    else:
-        warn('You are not running the correct challenge in normal mode, so the real flag size cannot be measured.')
-        info(f'Excluding the final newline, the flag is about {len(f'pwn.college{{{fake_flag}}}')} characters long.')
-        info(f'You would only need to figure out the middle {fake_flag.index('.')} characters of the flag.')
+    show_hint(dojo, module, challenge)
 
 @app.command('submit', help='An alias for [bold cyan]solve[/].', rich_help_panel='Flag Submission')
 @app.command(short_help='Submit a flag for a challenge.', rich_help_panel='Flag Submission')
@@ -572,103 +546,7 @@ def solve(
     If no challenge is given, the flag will be submitted for the current challenge.
     """
 
-    while not flag:
-        flag = input('Enter the flag: ').strip()
-
-    if flag in ['practice', 'pwn.college{practice}']:
-        warn('This is the practice flag!')
-        info('Restart the challenge in normal mode to get the real flag.')
-        info('(You can do this with [bold]dojo restart [green]-n[/][/])')
-        return
-
-    payload = deserialize_flag(flag)
-
-    if isinstance(payload, list) and len(payload) == 2 and all(isinstance(i, int) for i in payload):
-        account_id = request('/users/me').json().get('id')
-        if account_id is None:
-            error('Please login first or run this in the dojo.')
-
-        if challenge:
-            error('Not implemented yet.')
-            # challenge_id = get_challenge_id(challenge)
-        else:
-            # TODO: change /docker to output challenge_id instead of relying on /active-module which requires session cookie
-            # challenge_id = request('/docker').json().get('challenge_id')
-            challenge_id = request('/active-module', False).json().get('c_current', {}).get('challenge_id')
-            if challenge_id is None:
-                error('No active challenge session; start a challenge!')
-
-            if len(flag) != get_flag_size() - 1:
-                warn('This flag is the wrong size! Are you sure you want to submit?')
-                choice = input('(y/N) > ')
-                if choice.strip()[0].lower() != 'y':
-                    warn('Aborting flag submission attempt!')
-                    return
-
-        if payload[0] != account_id:
-            warn('This flag is from another account! Are you sure you want to submit?')
-            choice = input('(y/N) > ')
-            if choice.strip()[0].lower() != 'y':
-                warn('Aborting flag submission attempt!')
-                return
-
-        if payload[1] != challenge_id:
-            warn('This flag is from another challenge! Are you sure you want to submit?')
-            choice = input('(y/N) > ')
-            if choice.strip()[0].lower() != 'y':
-                warn('Aborting flag submission attempt!')
-                return
-
-    else:
-        warn('Could not deserialize flag. Are you sure you want to submit?')
-        choice = input('(y/N) > ')
-        if choice.strip()[0].lower() != 'y':
-            warn('Aborting flag submission attempt!')
-            return
-
-    info(f'Submitting the flag: {flag}')
-
-    if challenge:
-        if not dojo or not module:
-            challenge_path = parse_challenge_path(challenge)
-            if len(challenge_path) == 3 and all(isinstance(s, str) for s in challenge_path):
-                dojo, module, challenge = challenge_path
-            else:
-                error('Invalid challenge ID.')
-
-        # verify that this challenge exists?
-    else:
-        challenge_data = request('/docker').json()
-        dojo = challenge_data['dojo']
-        module = challenge_data['module']
-        challenge = challenge_data['challenge']
-
-    with Session() as session:
-        home_html = request('', False, session=session).text
-        nonce = re.search(r''''csrfNonce': "(\w+)"''', home_html)
-        if nonce:
-            headers = {'CSRF-Token': nonce.group(1)}
-        else:
-            error('Nonce not found.')
-
-        response = request(
-            f'/dojos/{dojo}/{module}/{challenge}/solve',
-            json={'submission': flag},
-            headers=headers,
-            session=session
-        )
-
-    if not response.ok and response.status_code != 400:
-        error(f'Failed to submit the flag (code: {response.status_code}).')
-    result = response.json()
-
-    if result['success']:
-        if result['status'] == 'solved':
-            success('The flag is correct! You have successfully solved the challenge!')
-        elif result['status'] == 'already_solved':
-            warn('The challenge has already been solved.')
-    else:
-        fail('The flag is incorrect.')
+    submit_flag(flag, dojo, module, challenge)
 
 @app.command(rich_help_panel='Configuration')
 def config(
