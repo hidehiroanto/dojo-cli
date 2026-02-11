@@ -126,7 +126,8 @@ def ssh_keygen():
         info('Enter the above key into the [bold cyan]Add New SSH Key[/] field, and click [bold cyan]Add[/].')
 
 def ssh_run(command: str | None = None, capture_output: bool = False, payload: bytes | None = None) -> bytes | None:
-    if not Path(which('ssh') or '/usr/bin/ssh').is_file():
+    ssh = Path(which('ssh') or '/usr/bin/ssh')
+    if not ssh.is_file():
         error('Please install OpenSSH first.')
 
     ssh_config = load_user_config()['ssh']
@@ -134,10 +135,10 @@ def ssh_run(command: str | None = None, capture_output: bool = False, payload: b
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser()
 
     if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
-        ssh_argv = ['ssh', '-F', ssh_config_file, ssh_config['Host']]
+        ssh_argv = [ssh, '-F', ssh_config_file, ssh_config['Host']]
     elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
         ssh_argv = [
-            'ssh', '-i', ssh_identity_file,
+            ssh, '-i', ssh_identity_file,
             '-o', f'ServerAliveCountMax={ssh_config['ServerAliveCountMax']}',
             '-o', f'ServerAliveInterval={ssh_config['ServerAliveInterval']}',
             f'{ssh_config['User']}@{ssh_config['HostName']}:{ssh_config['Port']}'

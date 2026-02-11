@@ -43,7 +43,7 @@ def deserialize_auth_token(auth_token: str) -> list | None:
     if auth_token.startswith(token_prefix):
         token_data = URLSafeTimedSerializer('').loads_unsafe(auth_token[len(token_prefix):])[1]
         if isinstance(token_data, list) and len(token_data) == 3:
-            if isinstance(token_data[0], int) and isinstance(token_data[1], str) and isinstance(token_data[2], str):
+            if isinstance(token_data[0], int) and isinstance(token_data[1], str) and token_data[2] == 'cli-auth-token':
                 return token_data
     return None
 
