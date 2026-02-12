@@ -1,5 +1,5 @@
 """
-Handles remote connections.
+Handles remote SSH connections.
 """
 
 import os
@@ -217,7 +217,15 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
         else:
             channel.invoke_shell()
             if payload:
+                # wait for initial prompt
+                buffer = b''
+                while not buffer.endswith(b'$ '):
+                    if channel.recv_ready():
+                        buffer += channel.recv(1024)
+
                 channel.send(payload)
+                # If the payload contains \n, the channel sends back \r\n
+                channel.recv(len(payload) + payload.count(b'\n'))
 
             def resize_pty(signum, frame):
                 try:

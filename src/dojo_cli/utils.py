@@ -17,13 +17,12 @@ import string
 from typing import Any
 
 from .config import load_user_config
-from .constants import TERM, TERM_PROGRAM
 from .http import request
 from .log import error, fail, info, success, warn
 from .remote import ssh_getsize
 from .terminal import apply_style
 
-if TERM_PROGRAM not in ['Apple_Terminal']:
+if os.getenv('TERM_PROGRAM') not in ['Apple_Terminal']:
     from textual_image.renderable import Image, SixelImage, TGPImage
 
 def get_rank(num):
@@ -136,9 +135,10 @@ def get_belt_hex(belt: str) -> str:
     return load_user_config()['belt_colors'][belt]
 
 def can_render_image():
-    if TERM in ['alacritty'] or TERM_PROGRAM in ['Apple_Terminal', 'tmux', 'WarpTerminal', 'zed']:
+    term, term_program = os.getenv('TERM'), os.getenv('TERM_PROGRAM')
+    if term in ['alacritty'] or term_program in ['Apple_Terminal', 'tmux', 'WarpTerminal', 'zed']:
         return False
-    if TERM in ['xterm-kitty'] or TERM_PROGRAM in ['ghostty', 'iTerm.app', 'vscode', 'WezTerm']:
+    if term in ['xterm-kitty'] or term_program in ['ghostty', 'iTerm.app', 'vscode', 'WezTerm']:
         return True
     return issubclass(Image, (SixelImage, TGPImage))
 

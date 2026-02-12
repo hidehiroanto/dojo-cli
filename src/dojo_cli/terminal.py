@@ -1,3 +1,7 @@
+"""
+Handles terminal output formatting.
+"""
+
 import datetime
 from pathlib import Path
 import re

@@ -1,5 +1,5 @@
 """
-Handles installing, updating, and launching Zed. I've only tested this on Mac OS so far.
+Handles installing, updating, and launching Zed.
 """
 
 from io import BytesIO
@@ -17,7 +17,7 @@ import tempfile
 from .config import load_user_config
 from .http import request
 from .log import error, info, success
-from .remote import run_cmd, ssh_listdir, ssh_mkdir, ssh_rmdir, ssh_remove, transfer
+from .remote import run_cmd, ssh_listdir, ssh_mkdir, ssh_remove, ssh_rmdir, transfer
 
 # use zerobrew or wax instead of homebrew?
 def homebrew_upgrade(formulae: list):

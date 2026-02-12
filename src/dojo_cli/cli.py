@@ -430,14 +430,54 @@ def status():
         fail(response.get('error'))
 
 @app.command(rich_help_panel='Remote Connection')
-def connect():
-    """Connect to the current challenge via an interactive remote shell."""
+def connect(
+    shell: Annotated[str | None, Option('-s', '--shell', help='The shell to launch.')] = None
+):
+    """Connect to the current challenge via an interactive remote shell (bash by default)."""
 
-    run_cmd()
+    run_cmd(payload=f'exec {shell}\n'.encode() if shell else None)
 
-@app.command('ssh', help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Connection')
-@app.command(help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Connection')
-@app.command('exec', rich_help_panel='Remote Connection')
+@app.command(rich_help_panel='Remote Connection')
+def fish():
+    """Connect to the current challenge via fish."""
+
+    run_cmd(payload=b'exec fish -l\n')
+
+@app.command(rich_help_panel='Remote Connection')
+def nu(
+    commands: Annotated[str | None, Option('-c', '--commands', help='Run the given commands and then exit.')] = None,
+    execute_commands: Annotated[str | None, Option('-e', '--execute', help='Run the given commands and then enter an interactive shell.')] = None,
+):
+    """Connect to the current challenge via nushell."""
+
+    payload = 'exec nu -l'
+    if commands is not None:
+        payload += f' -c {repr(commands)}'
+    if execute_commands is not None:
+        payload += f' -e {repr(execute_commands)}'
+    run_cmd(payload=payload.encode() + b'\n')
+
+@app.command(rich_help_panel='Remote Connection')
+def tmux():
+    """Connect to the current challenge via tmux."""
+
+    run_cmd(payload=b'exec tmux -l\n')
+
+@app.command(rich_help_panel='Remote Connection')
+def zellij():
+    """Connect to the current challenge via zellij."""
+
+    run_cmd(payload=b'exec zellij\n')
+
+@app.command(rich_help_panel='Remote Connection')
+def zsh():
+    """Connect to the current challenge via zsh."""
+
+    run_cmd(payload=b'exec zsh -l\n')
+
+@app.command('ssh', help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
+@app.command(help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
+@app.command('exec', rich_help_panel='Remote Execution')
 def run(
     command: Annotated[str | None, Argument(help='The command to run')] = None
 ):
@@ -445,7 +485,7 @@ def run(
 
     run_cmd(command)
 
-@app.command(rich_help_panel='Remote Connection')
+@app.command(rich_help_panel='Remote Execution')
 def du(
     path: Annotated[Path | None, Option('-p', '--path', help='Path to list files from.')] = None,
     count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20
@@ -454,7 +494,7 @@ def du(
 
     run_cmd(f'find {path or '~'} -type f -exec du -hs {{}} + 2>/dev/null | sort -hr | head -n {count}')
 
-@app.command(rich_help_panel='Remote Connection')
+@app.command(rich_help_panel='Remote Execution')
 def dust(
     path: Annotated[Path | None, Option('-p', '--path', help='Path to list files from.')] = None,
     count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20
@@ -531,7 +571,7 @@ def upload(
     transfer(local_path, remote_path, True)
     success(f'Uploaded {local_path} to {remote_path}')
 
-@app.command(rich_help_panel='Remote Connection')
+@app.command(rich_help_panel='Remote Coding')
 def zed(
     upgrade_zed: Annotated[bool, Option('-u', '--upgrade', help='Upgrade zed to the latest version.')] = False,
     use_lang_servers: Annotated[bool, Option('-l', '--lsp', help='Use ruff and ty, upgrade if necessary.')] = False
