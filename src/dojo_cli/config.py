@@ -4,10 +4,10 @@ Handles config. Config can be either JSON or YAML for now, might add TOML later.
 
 from copy import deepcopy
 import json
-from os import getenv
+import os
 from pathlib import Path
 from rich import print as rprint
-from sys import stderr
+import sys
 import yaml
 
 DEFAULT_CONFIG = {
@@ -32,14 +32,19 @@ DEFAULT_CONFIG = {
         'warn': 'bold yellow'
     },
     'object_styles': {
-        'False': 'italic red',
-        'None': 'italic magenta',
-        'True': 'italic green',
+        'False': 'bold italic bright_red',
+        'None': 'bold italic magenta',
+        'True': 'bold italic bright_green',
         'bytes': 'green',
+        'date': 'bold blue',
+        'email': 'bright_cyan',
         'float': 'bold cyan',
         'int': 'bold cyan',
-        'link': 'cyan',
-        'rank': 'bold green'
+        'filename': 'bold bright_magenta',
+        'path': 'bold magenta',
+        'rank': 'bold green',
+        'time': 'bold magenta',
+        'url': 'bright_blue'
     },
     'ssh': {
         'Host': 'pwn.college',
@@ -62,14 +67,14 @@ DEFAULT_CONFIG = {
     }
 }
 
-DEFAULT_CONFIG_PATH = '~/.config/dojo-cli/config'
+DEFAULT_CONFIG_PATH = Path('~/.config/dojo-cli/config')
 
 user_config = {}
 
 def load_config(config_path: Path):
     config_path = config_path.expanduser()
     if not config_path.is_absolute():
-        config_path = Path.home() / config_path
+        config_path = Path.cwd() / config_path
     if config_path.is_dir():
         config_path /= 'config'
     if not config_path.is_file():
@@ -80,7 +85,7 @@ def load_config(config_path: Path):
             return {}
         return yaml.safe_load(config_data)
     except Exception as e:
-        rprint(f'Error loading config file at `{config_path}`: {e}', file=stderr)
+        rprint(f'[[on red]ERROR[/]] Error loading config file at [bold]{config_path}[/]: {e}', file=sys.stderr)
         exit(1)
 
 def deepmerge(dst_dict: dict, src_dict: dict) -> dict:
@@ -99,7 +104,7 @@ def load_user_config() -> dict:
 
     global user_config
     if not user_config:
-        config_path = Path(getenv('DOJO_CONFIG', DEFAULT_CONFIG_PATH))
+        config_path = Path(os.getenv('DOJO_CONFIG', DEFAULT_CONFIG_PATH))
         user_config = deepmerge(DEFAULT_CONFIG, load_config(config_path))
     return user_config
 

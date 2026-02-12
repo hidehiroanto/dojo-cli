@@ -2,9 +2,7 @@
 Constants for the pwn.college dojo CLI.
 """
 
-from os import getenv
-from pathlib import Path
+import os
 
-FLAG_PATH = Path('/flag')
-TERM = getenv('TERM', '')
-TERM_PROGRAM = getenv('TERM_PROGRAM', '')
+TERM = os.getenv('TERM', '')
+TERM_PROGRAM = os.getenv('TERM_PROGRAM', '')

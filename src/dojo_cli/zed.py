@@ -17,7 +17,7 @@ import tempfile
 from .config import load_user_config
 from .http import request
 from .log import error, info, success
-from .remote import run_cmd, ssh_listdir, ssh_remove, transfer
+from .remote import run_cmd, ssh_listdir, ssh_mkdir, ssh_rmdir, ssh_remove, transfer
 
 # use zerobrew or wax instead of homebrew?
 def homebrew_upgrade(formulae: list):
@@ -116,9 +116,8 @@ def upload_lang_server(lang_server: str, home_dir: Path = Path('/home/hacker')):
             lang_server_data = tar_member.read() if tar_member else b''
 
         for version in versions:
-            # ssh_rmdir(lang_dir / lang_server / version)
-            run_cmd(f'rm -r {lang_dir / lang_server / '*'}')
-        run_cmd(f'mkdir -p {lang_server_dir}')
+            ssh_rmdir(lang_dir / lang_server / version)
+        ssh_mkdir(lang_server_dir)
 
         with tempfile.NamedTemporaryFile() as f:
             Path(f.name).chmod(0o755)

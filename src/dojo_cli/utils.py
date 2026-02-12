@@ -7,6 +7,7 @@ from cairosvg import svg2png
 from io import BytesIO
 from itsdangerous import URLSafeSerializer
 import os
+from pathlib import Path
 import re
 from requests import Session
 from rich import box, print as rprint
@@ -16,33 +17,14 @@ import string
 from typing import Any
 
 from .config import load_user_config
-from .constants import FLAG_PATH, TERM, TERM_PROGRAM
+from .constants import TERM, TERM_PROGRAM
 from .http import request
 from .log import error, fail, info, success, warn
 from .remote import ssh_getsize
+from .terminal import apply_style
 
 if TERM_PROGRAM not in ['Apple_Terminal']:
     from textual_image.renderable import Image, SixelImage, TGPImage
-
-def stylize_object(obj):
-    object_styles = load_user_config()['object_styles']
-
-    if isinstance(obj, str):
-        if obj.startswith('http://') or obj.startswith('https://'):
-            style = f'{object_styles['link']} link={obj}'
-        else:
-            return obj
-
-    else:
-        type_name = type(obj).__name__
-        if str(obj) in object_styles:
-            style = object_styles[str(obj)]
-        elif type_name in object_styles:
-            style = object_styles[type_name]
-        else:
-            return obj
-
-    return f'[{style}]{obj}[/]'
 
 def get_rank(num):
     rank_style = load_user_config()['object_styles']['rank']
@@ -76,16 +58,17 @@ def get_wechall_rankings(page: int = 1, simple: bool = False):
 
     return wechall_data
 
-def get_challenge_id(dojo: str, module: str, challenge: str) -> int:
-    response = request(f'/{dojo}/{module}', False, False)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    challenges = soup.find_all('div', class_='challenge-init')
-    for challenge_div in challenges:
-        input_challenge = challenge_div.find('input', id='challenge')
-        if input_challenge and input_challenge['value'] == challenge:
-            input_challenge_id = challenge_div.find('input', id='challenge-id')
-            if input_challenge_id:
-                return int(str(input_challenge_id['value']))
+def get_challenge_id(dojo: str | None, module: str | None, challenge: str | None) -> int:
+    if dojo and module and challenge:
+        response = request(f'/{dojo}/{module}', False, False)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        challenges = soup.find_all('div', class_='challenge-init')
+        for challenge_div in challenges:
+            input_challenge = challenge_div.find('input', id='challenge')
+            if input_challenge and input_challenge['value'] == challenge:
+                input_challenge_id = challenge_div.find('input', id='challenge-id')
+                if input_challenge_id:
+                    return int(str(input_challenge_id['value']))
     return -1
 
 def parse_challenge_path(challenge: str, challenge_data: dict = {}) -> tuple:
@@ -100,14 +83,16 @@ def parse_challenge_path(challenge: str, challenge_data: dict = {}) -> tuple:
     return result[0] if result else tuple()
 
 def get_flag_size() -> int:
+    flag_path = Path('/flag')
+
     if 'DOJO_AUTH_TOKEN' in os.environ:
-        if FLAG_PATH.is_file():
-            return FLAG_PATH.stat().st_size
+        if flag_path.is_file():
+            return flag_path.stat().st_size
         else:
             error('Flag file does not exist.')
 
     elif request('/docker').json().get('success'):
-        flag_size = ssh_getsize('/flag')
+        flag_size = ssh_getsize(flag_path)
         if flag_size == -1:
             error('Flag file does not exist.')
         return flag_size
@@ -144,10 +129,10 @@ def show_table(table_data: dict[str, Any] | list[dict[str, Any]], title: str | N
             justify=table_config['column']['justify']
         ))
     table = Table(*map(get_column, keys), title=title, box=get_box(table_config['box']))
-    [table.add_row(*[stylize_object(row[key]) for key in keys]) for row in table_data]
+    [table.add_row(*[apply_style(row[key]) for key in keys]) for row in table_data]
     rprint(table)
 
-def get_belt_color(belt: str) -> str:
+def get_belt_hex(belt: str) -> str:
     return load_user_config()['belt_colors'][belt]
 
 def can_render_image():
@@ -218,7 +203,8 @@ def show_hint(dojo: str | None = None, module: str | None = None, challenge: str
     chal_data = request('/docker').json()
     if list(map(chal_data.get, ['dojo', 'module', 'challenge', 'practice'])) == [dojo, module, challenge, False]:
         flag_length = get_flag_size() - 1
-        warn('The following information assumes that [bold yellow]/flag[/] has not been tampered with:')
+        flag_path = Path('/flag')
+        warn(f'The following information assumes that {apply_style(flag_path)} has not been tampered with:')
         info(f'Excluding the final newline, the flag is {flag_length} characters long.')
         middle_count = flag_length - len(flag_prefix) - len(flag_suffix)
         info(f'You only need to figure out the middle {middle_count} characters of the flag.')

@@ -6,28 +6,37 @@ import os
 from paramiko.client import AutoAddPolicy, SSHClient
 from paramiko.sftp_client import SFTPClient
 from pathlib import Path
+import select
 from shutil import which
+import signal
 import stat
 import subprocess
 import sys
+import termios
+import tty
 
 from .config import load_user_config
 from .http import request
 from .log import error, info, success, warn
+from .terminal import apply_style
+
+ssh_client = None
 
 def get_ssh_client() -> SSHClient:
     ssh_config = load_user_config()['ssh']
 
-    client = SSHClient()
-    client.load_system_host_keys()
-    client.set_missing_host_key_policy(AutoAddPolicy())
-    client.connect(
-        ssh_config['HostName'],
-        ssh_config['Port'],
-        ssh_config['User'],
-        key_filename=str(Path(ssh_config['IdentityFile']).expanduser())
-    )
-    return client
+    global ssh_client
+    if not ssh_client:
+        ssh_client = SSHClient()
+        ssh_client.load_system_host_keys()
+        ssh_client.set_missing_host_key_policy(AutoAddPolicy())
+        ssh_client.connect(
+            ssh_config['HostName'],
+            ssh_config['Port'],
+            ssh_config['User'],
+            key_filename=str(Path(ssh_config['IdentityFile']).expanduser())
+        )
+    return ssh_client
 
 def get_sftp_client() -> SFTPClient:
     sftp_client = get_ssh_client().open_sftp()
@@ -36,28 +45,25 @@ def get_sftp_client() -> SFTPClient:
 
 def ssh_chmod(path: Path | str, mode: int):
     with get_sftp_client() as sftp_client:
-        return sftp_client.chmod(str(path), mode)
+        sftp_client.chmod(str(path), mode)
 
 def ssh_getsize(path: Path | str) -> int:
-    with get_sftp_client() as sftp_client:
-        try:
-            return sftp_client.stat(str(path)).st_size
-        except FileNotFoundError:
-            return -1
+    stat_result = ssh_stat(path)
+    if not stat_result:
+        return -1
+    return stat_result.st_size
 
 def ssh_is_dir(path: Path | str) -> bool:
-    with get_sftp_client() as sftp_client:
-        try:
-            return stat.S_ISDIR(sftp_client.stat(str(path)).st_mode)
-        except FileNotFoundError:
-            return False
+    stat_result = ssh_stat(path)
+    if not stat_result:
+        return False
+    return stat.S_ISDIR(stat_result.st_mode)
 
 def ssh_is_file(path: Path | str) -> bool:
-    with get_sftp_client() as sftp_client:
-        try:
-            return stat.S_ISREG(sftp_client.stat(str(path)).st_mode)
-        except FileNotFoundError:
-            return False
+    stat_result = ssh_stat(path)
+    if not stat_result:
+        return False
+    return stat.S_ISREG(stat_result.st_mode)
 
 def ssh_listdir(path: Path | str) -> list[str]:
     with get_sftp_client() as sftp_client:
@@ -65,21 +71,42 @@ def ssh_listdir(path: Path | str) -> list[str]:
 
 def ssh_mkdir(path: Path | str):
     with get_sftp_client() as sftp_client:
-        return sftp_client.mkdir(str(path), 0o755)
+        for parent in Path(path).parents[::-1]:
+            if not ssh_is_dir(parent):
+                sftp_client.mkdir(str(parent), 0o755)
+        if not ssh_is_dir(path):
+            sftp_client.mkdir(str(path), 0o755)
+
+def ssh_open(path: Path | str, mode: str = 'r'):
+    return get_sftp_client().open(str(path), mode)
 
 def ssh_remove(path: Path | str):
     with get_sftp_client() as sftp_client:
-        return sftp_client.remove(str(path))
+        sftp_client.remove(str(path))
 
 def ssh_rmdir(path: Path | str):
     with get_sftp_client() as sftp_client:
-        return sftp_client.rmdir(str(path))
+        for child in sftp_client.listdir(str(path)):
+            child_path = Path(path) / child
+            if ssh_is_dir(child_path):
+                ssh_rmdir(child_path)
+            else:
+                sftp_client.remove(str(child_path))
+        sftp_client.rmdir(str(path))
+
+def ssh_stat(path: Path | str) -> os.stat_result | None:
+    with get_sftp_client() as sftp_client:
+        try:
+            return sftp_client.stat(str(path))
+        except FileNotFoundError:
+            return None
 
 def ssh_keygen():
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
 
-    if not Path(which('ssh-keygen') or '/usr/bin/ssh-keygen').is_file():
+    ssh_keygen = Path(which('ssh-keygen') or '/usr/bin/ssh-keygen')
+    if not ssh_keygen.is_file():
         error('Please install ssh-keygen first.')
 
     user_config = load_user_config()
@@ -93,7 +120,7 @@ def ssh_keygen():
             warn('Aborting SSH key generation!')
             return
 
-    subprocess.run(['ssh-keygen', '-N', '', '-f', ssh_identity_file, '-t', ssh_config['algorithm']])
+    subprocess.run([ssh_keygen, '-N', '', '-f', ssh_identity_file, '-t', ssh_config['algorithm']])
 
     if not ssh_config_file.is_file():
         ssh_config_file.touch(0o644)
@@ -125,7 +152,21 @@ def ssh_keygen():
         info(f'Log into pwn.college using a browser and navigate to [cyan link={ssh_key_url}]{ssh_key_url}[/].')
         info('Enter the above key into the [bold cyan]Add New SSH Key[/] field, and click [bold cyan]Add[/].')
 
-def ssh_run(command: str | None = None, capture_output: bool = False, payload: bytes | None = None) -> bytes | None:
+def print_file(path: Path):
+    if ssh_is_dir(path):
+        error(f'{apply_style(path)} is a directory.')
+    elif not ssh_is_file(path):
+        error(f'{apply_style(path)} is not an existing file.')
+
+    try:
+        with get_sftp_client() as sftp_client:
+            with sftp_client.open(str(path), 'rb') as f:
+                sys.stdout.buffer.write(f.read())
+                sys.stdout.buffer.flush()
+    except PermissionError:
+        error(f'Permission to read {apply_style(path)} denied.')
+
+def run_openssh(command: str | None = None, capture_output: bool = False, payload: bytes | None = None) -> bytes | None:
     ssh = Path(which('ssh') or '/usr/bin/ssh')
     if not ssh.is_file():
         error('Please install OpenSSH first.')
@@ -135,10 +176,10 @@ def ssh_run(command: str | None = None, capture_output: bool = False, payload: b
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser()
 
     if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
-        ssh_argv = [ssh, '-F', ssh_config_file, ssh_config['Host']]
+        ssh_argv = [ssh, '-F', ssh_config_file, '-t', ssh_config['Host']]
     elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
         ssh_argv = [
-            ssh, '-i', ssh_identity_file,
+            ssh, '-i', ssh_identity_file, '-t',
             '-o', f'ServerAliveCountMax={ssh_config['ServerAliveCountMax']}',
             '-o', f'ServerAliveInterval={ssh_config['ServerAliveInterval']}',
             f'{ssh_config['User']}@{ssh_config['HostName']}:{ssh_config['Port']}'
@@ -147,34 +188,91 @@ def ssh_run(command: str | None = None, capture_output: bool = False, payload: b
         error('Something went wrong with the SSH config file or the SSH key, please make sure at least one is valid.')
 
     if command:
-        ssh_argv.extend(['-t', command])
+        ssh_argv.append(command)
 
     subprocess.run(ssh_argv, capture_output=capture_output, input=payload)
+
+def run_paramiko(command: str | None = None, capture_output: bool = False, payload: bytes | None = None) -> bytes | None:
+    with get_ssh_client().get_transport().open_session() as channel:
+        try:
+            width, height = os.get_terminal_size()
+        except OSError:
+            width, height = 80, 24
+        channel.get_pty('xterm-256color', width, height)
+
+        if command:
+            channel.exec_command(command)
+            with channel.makefile_stdin('wb') as stdin:
+                if payload:
+                    stdin.write(payload)
+            with channel.makefile('rb') as stdout, channel.makefile_stderr('rb') as stderr:
+                output, err = stdout.read(), stderr.read()
+            sys.stderr.buffer.write(err)
+            sys.stderr.buffer.flush()
+            if capture_output:
+                return output
+            else:
+                sys.stdout.buffer.write(output)
+                sys.stdout.buffer.flush()
+        else:
+            channel.invoke_shell()
+            if payload:
+                channel.send(payload)
+
+            def resize_pty(signum, frame):
+                try:
+                    width, height = os.get_terminal_size()
+                    channel.resize_pty(width, height)
+                except OSError:
+                    pass
+
+            signal.signal(signal.SIGWINCH, resize_pty)
+            oldtty = termios.tcgetattr(sys.stdin)
+            output = b''
+            try:
+                tty.setraw(sys.stdin.fileno())
+                tty.setcbreak(sys.stdin.fileno())
+                channel.settimeout(0.0)
+                while True:
+                    rlist = select.select([channel, sys.stdin], [], [])[0]
+                    if channel in rlist:
+                        try:
+                            data = channel.recv(1024)
+                            if not data:
+                                break
+                            if capture_output:
+                                output += data
+                            else:
+                                sys.stdout.buffer.write(data)
+                                sys.stdout.buffer.flush()
+                        except TimeoutError:
+                            pass
+                    if sys.stdin in rlist:
+                        data = os.read(sys.stdin.fileno(), 1024)
+                        if not data:
+                            break
+                        channel.send(data)
+            finally:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
+
+            if capture_output:
+                return output
 
 def run_cmd(command: str | None = None, capture_output: bool = False, payload: bytes | None = None, client: str = 'paramiko') -> bytes | None:
     """Run a command on the remote server. If capture_output is True, the stdout bytes are returned."""
 
-    if 'DOJO_AUTH_TOKEN' in os.environ:
+    if client == 'local' or 'DOJO_AUTH_TOKEN' in os.environ:
         return subprocess.run(command or 'bash', shell=True, capture_output=capture_output, input=payload).stdout
+    else:
+        if not request('/docker').json().get('success'):
+            error('No active challenge session; start a challenge!')
 
-    if not request('/docker').json().get('success'):
-        error('No active challenge session; start a challenge!')
-
-    if client == 'paramiko':
-        with get_ssh_client() as client:
-            stdin, stdout, stderr = client.exec_command(command or 'bash', get_pty=True)
-            if payload:
-                stdin.write(payload)
-                stdin.channel.shutdown_write()
-            while not stdout.channel.exit_status_ready():
-                pass
-            if capture_output:
-                return stdout.read()
-            else:
-                sys.stdout.buffer.write(stdout.read())
-
-    elif client == 'openssh':
-        return ssh_run(command, capture_output, payload)
+        if client == 'openssh':
+            return run_openssh(command, capture_output, payload)
+        elif client == 'paramiko':
+            return run_paramiko(command, capture_output, payload)
+        else:
+            error(f'Invalid client: {client}')
 
 def transfer(src_path: Path | str, dst_path: Path | str, upload: bool = False):
     if 'DOJO_AUTH_TOKEN' in os.environ:

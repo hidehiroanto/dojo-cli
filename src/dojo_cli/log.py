@@ -3,7 +3,7 @@ Handles logging.
 """
 
 from rich import print as rprint
-from sys import stderr
+import sys
 
 from .config import load_user_config
 
@@ -11,7 +11,7 @@ def format_message(message_type: str, symbol: str, message: str):
     return f'[[{load_user_config()['log_styles'][message_type]}]{symbol}[/]] {message}'
 
 def error(message: str):
-    rprint(format_message('error', 'ERROR', message), file=stderr)
+    rprint(format_message('error', 'ERROR', message), file=sys.stderr)
     exit(1)
 
 def fail(message: str):

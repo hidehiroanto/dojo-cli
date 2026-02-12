@@ -4,7 +4,7 @@ Handles HTTP requests and responses.
 
 from itsdangerous import URLSafeTimedSerializer
 import json
-from os import getenv
+import os
 from pathlib import Path
 import re
 from requests import Session
@@ -58,7 +58,7 @@ def request(url: str, api: bool = True, auth: bool = True, csrf: bool = False, *
         url = base_url + (user_config['api'] if api else '') + url
 
     if auth:
-        dojo_auth_token = getenv('DOJO_AUTH_TOKEN', '')
+        dojo_auth_token = os.getenv('DOJO_AUTH_TOKEN', '')
         cookie_path = Path(user_config['cookie_path']).expanduser()
         if deserialize_auth_token(dojo_auth_token):
             headers['Authorization'] = f'Bearer {dojo_auth_token}'

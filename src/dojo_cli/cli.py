@@ -4,8 +4,10 @@ This is the main command line interface file.
 
 # TODO: transfer command implementations to utils, create more Python files if needed
 # TODO: add commands for solve stats
+# TODO: resolve dict.get(key) vs dict[key]
 # Caveat: this CLI is designed for Linux remote challenges, might work for Mac challenges idk
 
+import datetime
 from getpass import getpass
 from pathlib import Path
 import os
@@ -14,16 +16,17 @@ from rich.markdown import Markdown
 from typer import Argument, Option, Typer
 from typing import Annotated
 
-from .config import DEFAULT_CONFIG_PATH, show_config, load_user_config
+from .config import DEFAULT_CONFIG_PATH, load_user_config, show_config
 from .http import delete_cookie, request, save_cookie
 from .log import error, fail, info, success, warn
-from .remote import run_cmd, ssh_is_dir, ssh_is_file, ssh_keygen, transfer
+from .remote import print_file, run_cmd, ssh_is_dir, ssh_is_file, ssh_keygen, transfer
 from .sensai import init_sensai
+from .terminal import apply_style
 from .tui import init_tui
 from .utils import (
-    can_render_image, download_image, get_belt_color,
-    get_rank, get_wechall_rankings, parse_challenge_path,
-    show_hint, show_table, submit_flag
+    can_render_image, download_image,
+    get_belt_hex, get_challenge_id, get_rank, get_wechall_rankings,
+    parse_challenge_path, show_hint, show_table, submit_flag
 )
 from .zed import init_zed
 
@@ -31,11 +34,11 @@ app = Typer(
     no_args_is_help=True,
     context_settings={'help_option_names': ['-h', '--help']},
     help=f"""
-    [bold cyan]dojo[/] is a Python command line interface to interact with the pwn.college website and API.
+    [bold cyan]dojo[/] is a Python command line interface to interact with the website and API at {apply_style(load_user_config()['base_url'])}.
 
     Type -h or --help after [bold cyan]dojo[/] <COMMAND> to display further documentation for one of the below commands.
 
-    Set the [bold green]DOJO_CONFIG[/] environment variable to override the default configuration path at [bold yellow]{DEFAULT_CONFIG_PATH}[/].
+    Set the [bold green]DOJO_CONFIG[/] environment variable to override the default configuration path at {apply_style(DEFAULT_CONFIG_PATH)}.
     """,
     add_completion=False
 )
@@ -78,11 +81,12 @@ def keygen():
 
     ssh_keygen()
 
-# TODO: Add belt
 @app.command('profile', help='An alias for [bold cyan]whoami[/].', rich_help_panel='User Info')
 @app.command('me', help='An alias for [bold cyan]whoami[/].', rich_help_panel='User Info')
 @app.command(rich_help_panel='User Info')
-def whoami():
+def whoami(
+    simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
+):
     """Show information about the current user (you!)"""
 
     me = request('/users/me')
@@ -92,12 +96,22 @@ def whoami():
 
     score = request('/score', auth=False, params={'username': account['name']})
     fields = list(map(int, score.json().split(':')))
+
+    belt_data = request('/belts', auth=False).json()['users'].get(str(account['id']), {})
+    belt_hex = get_belt_hex(belt_data.get('color', 'white'))
+
     account['rank'] = f'[bold green]{get_rank(fields[0])}/{fields[5]}[/]'
-    account['handle'] = f'[bold green]{account['name']}[/]'
+    account['handle'] = f'[bold {belt_hex}]{account['name']}[/]'
+    if not simple and can_render_image():
+        account['belt'] = download_image(f'/belt/{belt_data['color']}.svg', 'belt')
+    else:
+        account['belt'] = f'[bold {belt_hex}]{belt_data['color'].title()}[/]'
+    account['country'] = ''.join(chr(ord(c) + ord('🇦') - ord('A')) for c in account['country'])
+    account['date_ascended'] = datetime.datetime.fromisoformat(belt_data['date'])
     account['score'] = f'[bold cyan]{fields[1]}/{fields[2]}[/]'
 
     info(f'You are the epic hacker [bold green]{account['name']}[/]!')
-    keys = ['rank', 'id', 'handle', 'email', 'website', 'affiliation', 'country', 'bracket', 'score']
+    keys = ['rank', 'id', 'handle', 'belt', 'email', 'website', 'affiliation', 'country', 'bracket', 'date_ascended', 'score']
     show_table(account, 'Account Info', keys)
 
 @app.command('score', help='An alias for [bold cyan]whois[/].', rich_help_panel='User Info')
@@ -117,6 +131,7 @@ def whois(
 
     score = request('/score', auth=False, params={'username': username}).json()
     fields = list(map(int, score.split(':')))
+
     show_table({
         'rank': f'[bold green]{get_rank(fields[0])}/{fields[5]}[/]',
         'handle': f'[bold green]{username}[/]',
@@ -143,10 +158,10 @@ def scoreboard(
         for row in standings:
             belt = row['belt'].split('/')[-1].split('.')[0]
             symbol = row['symbol'].split('/')[-1].split('.')[0]
-            color = get_belt_color(belt)
+            belt_hex = get_belt_hex(belt)
 
             row['rank'] = get_rank(row['rank'])
-            row['handle'] = f'[bold {color}]{row['name']}[/]'
+            row['handle'] = f'[bold {belt_hex}]{row['name']}[/]'
             row['badges'] = ''.join(sorted(badge['emoji'] for badge in row['badges']))
 
             if render_image:
@@ -158,7 +173,7 @@ def scoreboard(
                     images[symbol] = download_image(row['symbol'])
                 row['role'] = images[symbol]
             else:
-                row['belt'] = f'[bold {color}]{belt.title()}[/]'
+                row['belt'] = f'[bold {belt_hex}]{belt.title()}[/]'
                 row['role'] = 'ASU Student' if symbol == 'fork' else symbol.title()
 
         title = f'Scoreboard for [bold]{f'{dojo}/{module}' if module else dojo}[/]'
@@ -185,33 +200,34 @@ def belts(
 
     belts = []
     if belt in response['ranks']:
-        color = get_belt_color(belt)
-        title = f'[bold {color}]Belted Hackers[/]'
+        belt_hex = get_belt_hex(belt)
+        title = f'[bold {belt_hex}]Belted Hackers[/]'
         for rank, id in enumerate(response['ranks'][belt]):
             user = response['users'][str(id)]
             user['rank'] = f'[bold green]{get_rank(rank + 1)}/{len(response['ranks'][belt])}[/]'
             user['id'] = id
-            user['handle'] = f'[bold {color}]{user['handle']}[/]'
+            user['handle'] = f'[bold {belt_hex}]{user['handle']}[/]'
             if render_image:
                 user['belt'] = images[belt]
             else:
-                user['belt'] = f'[bold {color}]{user['color'].title()}[/]'
+                user['belt'] = f'[bold {belt_hex}]{user['color'].title()}[/]'
             user['website'] = user['site']
             user['date_ascended'] = user['date']
+            user['date_ascended'] = datetime.datetime.fromisoformat(user['date'])
             belts.append(user)
     else:
         title = '[bold]Belted Hackers[/]'
         for rank, (id, user) in enumerate(response['users'].items()):
-            color = get_belt_color(user['color'])
+            belt_hex = get_belt_hex(user['color'])
             user['rank'] = f'[bold green]{get_rank(rank + 1)}/{len(response['users'])}[/]'
             user['id'] = int(id)
-            user['handle'] = f'[bold {color}]{user['handle']}[/]'
+            user['handle'] = f'[bold {belt_hex}]{user['handle']}[/]'
             if render_image:
                 user['belt'] = images[user['color']]
             else:
-                user['belt'] = f'[bold {color}]{user['color'].title()}[/]'
+                user['belt'] = f'[bold {belt_hex}]{user['color'].title()}[/]'
             user['website'] = user['site']
-            user['date_ascended'] = user['date']
+            user['date_ascended'] = datetime.datetime.fromisoformat(user['date'])
             belts.append(user)
 
     if page is not None:
@@ -309,10 +325,12 @@ def start(
     elif not dojo or not module:
         challenge_path = parse_challenge_path(challenge, chal_data)
         if len(challenge_path) == 3 and all(isinstance(s, str) for s in challenge_path):
-            # TODO: confirm this challenge actually exists
             dojo, module, challenge = challenge_path
         else:
             error('Could not parse challenge ID.')
+
+    if get_challenge_id(dojo, module, challenge) == -1:
+        error('Challenge does not exist.')
 
     if privileged:
         practice = True
@@ -411,13 +429,13 @@ def status():
     else:
         fail(response.get('error'))
 
-@app.command('ssh', help='An alias for [bold cyan]connect[/].', rich_help_panel='Remote Connection')
 @app.command(rich_help_panel='Remote Connection')
 def connect():
     """Connect to the current challenge via an interactive remote shell."""
 
-    run_cmd(client='openssh')
+    run_cmd()
 
+@app.command('ssh', help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Connection')
 @app.command(help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Connection')
 @app.command('exec', rich_help_panel='Remote Connection')
 def run(
@@ -425,7 +443,7 @@ def run(
 ):
     """Execute a remote command. If no command is given, start a shell like [bold cyan]connect[/]."""
 
-    run_cmd(command, client='openssh')
+    run_cmd(command)
 
 @app.command(rich_help_panel='Remote Connection')
 def du(
@@ -434,7 +452,7 @@ def du(
 ):
     """List the largest files in a directory, using [bold cyan]du[/]. Helpful when clearing up space."""
 
-    run_cmd(f'find {path or '~'} -type f -exec du -hs {{}} + 2>/dev/null | sort -hr | head -n {count}', client='openssh')
+    run_cmd(f'find {path or '~'} -type f -exec du -hs {{}} + 2>/dev/null | sort -hr | head -n {count}')
 
 @app.command(rich_help_panel='Remote Connection')
 def dust(
@@ -443,7 +461,15 @@ def dust(
 ):
     """List the largest files in a directory, using [bold cyan]dust[/]. Helpful when clearing up space."""
 
-    run_cmd(f'dust -CFprx -n {count} {path or '~'} 2>/dev/null', client='openssh')
+    run_cmd(f'dust -CFprx -n {count} {path or '~'} 2>/dev/null')
+
+@app.command(rich_help_panel='Remote Transfer')
+def cat(
+    path: Annotated[Path, Argument(help='The file to print')]
+):
+    """Print the contents of a remote file to standard out."""
+
+    print_file(path)
 
 @app.command('down', help='An alias for [bold cyan]download[/].', rich_help_panel='Remote Transfer')
 @app.command(rich_help_panel='Remote Transfer')
