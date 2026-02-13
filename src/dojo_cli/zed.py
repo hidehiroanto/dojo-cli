@@ -12,15 +12,15 @@ import requests
 import subprocess
 import sys
 import tarfile
-import tempfile
 
 from .config import load_user_config
 from .http import request
 from .log import error, info, success, warn
-from .remote import run_cmd, ssh_getsize, ssh_listdir, ssh_mkdir, ssh_remove, ssh_rmdir, upload_file
+from .remote import run_cmd, ssh_chmod, ssh_getsize, ssh_listdir, ssh_mkdir, ssh_remove, ssh_rmdir, ssh_write
 
 HOME_DIR_MAX_SIZE = 1_000_000_000
 LOCAL_BIN_DIR = Path('~/.local/bin').expanduser()
+
 CARGO_BIN_DIR = Path('~/.cargo/bin').expanduser()
 RUSTUP_INSTALL_URL = 'https://sh.rustup.rs'
 
@@ -188,6 +188,7 @@ def upload_zed_server():
     echo_query = run_cmd('echo $HOME', True) or b'/home/hacker'
     home_dir = Path(echo_query.strip().decode())
     zed_server_dir = home_dir / '.zed_server'
+    ssh_mkdir(zed_server_dir)
     zed_old_versions = ssh_listdir(zed_server_dir)
 
     if sys.platform in ['darwin', 'linux']:
@@ -197,19 +198,19 @@ def upload_zed_server():
         zed_root = zed_cli.resolve().parent.parent
         zed_app = zed_root / ('MacOS/zed' if sys.platform == 'darwin' else 'libexec/zed-editor')
     elif sys.platform == 'win32':
-        error('Windows is not yet supported. Please consult the relevant resources to upload the server manually.')
+        error(f'Windows is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
     else:
-        error('Your operating system is not yet supported. Please consult the relevant resources to upload the server manually.')
+        error(f'Your OS is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
 
     if not zed_app.is_file():
         error(f'Please install Zed first: [bold cyan]curl -f {ZED_INSTALL_URL} | sh[/].')
     zed_system_specs = subprocess.run([zed_app, '--system-specs'], capture_output=True).stdout
     zed_semver = zed_system_specs.split()[6].decode()
+    zed_server = f'zed-remote-server-stable-{zed_semver[1:]}'
 
     info(f'Installed versions of zed-remote-server: {zed_old_versions}')
     info(f'Installed version of local Zed binary: {zed_semver}')
 
-    zed_server = f'zed-remote-server-stable-{zed_semver[1:]}'
     if zed_server not in zed_old_versions:
         info('Updating zed-remote-server...')
 
@@ -227,12 +228,8 @@ def upload_zed_server():
         for old_version in zed_old_versions:
             ssh_remove(zed_server_dir / old_version)
 
-        with tempfile.NamedTemporaryFile() as temp_file:
-            temp_file.write(zed_server_data)
-            temp_file.flush()
-            temp_path = Path(temp_file.name)
-            temp_path.chmod(0o755)
-            upload_file(temp_path, zed_server_dir / zed_server)
+        ssh_write(zed_server_dir / zed_server, zed_server_data)
+        ssh_chmod(zed_server_dir / zed_server, 0o755)
 
         success(f'Updated zed-remote-server to version {zed_semver}')
 
@@ -240,6 +237,7 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
     echo_query = run_cmd('echo $HOME', True) or b'/home/hacker'
     home_dir = Path(echo_query.strip().decode())
     lang_dir = home_dir / '.local' / 'share' / 'zed' / 'languages'
+    ssh_mkdir(lang_dir / lang_server)
     old_versions = ssh_listdir(lang_dir / lang_server)
     latest = requests.get(latest_url).json()
 
@@ -264,14 +262,10 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
 
         for old_version in old_versions:
             ssh_rmdir(lang_dir / lang_server / old_version)
-        ssh_mkdir(lang_server_dir)
 
-        with tempfile.NamedTemporaryFile() as temp_file:
-            temp_file.write(lang_server_data)
-            temp_file.flush()
-            temp_path = Path(temp_file.name)
-            temp_path.chmod(0o755)
-            upload_file(temp_path, lang_server_dir / lang_server)
+        ssh_mkdir(lang_server_dir)
+        ssh_write(lang_server_dir / lang_server, lang_server_data)
+        ssh_chmod(lang_server_dir / lang_server, 0o755)
 
         success(f'Updated {lang_server} to version {latest['name']}')
 

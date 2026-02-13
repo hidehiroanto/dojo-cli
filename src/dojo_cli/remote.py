@@ -67,16 +67,18 @@ def ssh_getsize(path: Path | str) -> int:
             return -1
 
 def ssh_is_dir(path: Path | str) -> bool:
-    stat_result = ssh_stat(path)
-    if not stat_result:
-        return False
-    return stat.S_ISDIR(stat_result.st_mode)
+    with get_sftp_client() as sftp_client:
+        try:
+            return stat.S_ISDIR(sftp_client.stat(str(path)).st_mode)
+        except FileNotFoundError:
+            return False
 
 def ssh_is_file(path: Path | str) -> bool:
-    stat_result = ssh_stat(path)
-    if not stat_result:
-        return False
-    return stat.S_ISREG(stat_result.st_mode)
+    with get_sftp_client() as sftp_client:
+        try:
+            return stat.S_ISREG(sftp_client.stat(str(path)).st_mode)
+        except FileNotFoundError:
+            return False
 
 def ssh_listdir(path: Path | str) -> list[str]:
     with get_sftp_client() as sftp_client:
@@ -92,8 +94,10 @@ def ssh_mkdir(path: Path | str):
         if not ssh_is_dir(path):
             sftp_client.mkdir(str(path), 0o755)
 
-def ssh_open(path: Path | str, mode: str = 'r'):
-    return get_sftp_client().open(str(path), mode)
+def ssh_read(path: Path | str) -> bytes:
+    with get_sftp_client() as sftp_client:
+        with sftp_client.open(str(path), 'rb') as file:
+            return file.read()
 
 def ssh_remove(path: Path | str):
     with get_sftp_client() as sftp_client:
@@ -111,12 +115,10 @@ def ssh_rmdir(path: Path | str):
                 sftp_client.remove(str(child_path))
         sftp_client.rmdir(str(path))
 
-def ssh_stat(path: Path | str) -> os.stat_result | None:
+def ssh_write(path: Path | str, data: bytes):
     with get_sftp_client() as sftp_client:
-        try:
-            return sftp_client.stat(str(path))
-        except FileNotFoundError:
-            return None
+        with sftp_client.open(str(path), 'wb') as file:
+            file.write(data)
 
 def ssh_keygen():
     if 'DOJO_AUTH_TOKEN' in os.environ:
@@ -180,10 +182,8 @@ def print_file(path: Path):
         error(f'{apply_style(path)} is not an existing file.')
 
     try:
-        with get_sftp_client() as sftp_client:
-            with sftp_client.open(str(path), 'rb') as f:
-                sys.stdout.buffer.write(f.read())
-                sys.stdout.buffer.flush()
+        sys.stdout.buffer.write(ssh_read(path))
+        sys.stdout.buffer.flush()
     except PermissionError:
         error(f'Permission to read {apply_style(path)} denied.')
 
@@ -259,21 +259,21 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
                 rlist = select.select([channel, sys.stdin], [], [])[0]
                 if channel in rlist:
                     try:
-                        data = channel.recv(BUFFER_SIZE)
-                        if not data:
+                        buffer = channel.recv(BUFFER_SIZE)
+                        if not buffer:
                             break
                         if capture_output:
-                            output += data
+                            output += buffer
                         else:
-                            sys.stdout.buffer.write(data)
+                            sys.stdout.buffer.write(buffer)
                             sys.stdout.buffer.flush()
                     except TimeoutError:
                         pass
                 if sys.stdin in rlist:
-                    data = os.read(sys.stdin.fileno(), BUFFER_SIZE)
-                    if not data:
+                    buffer = os.read(sys.stdin.fileno(), BUFFER_SIZE)
+                    if not buffer:
                         break
-                    channel.sendall(data)
+                    channel.sendall(buffer)
         finally:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
 
