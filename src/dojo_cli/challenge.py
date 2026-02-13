@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from itsdangerous import URLSafeSerializer
 import os
 import re
+from rich.markdown import Markdown
 from pathlib import Path
 import string
 
@@ -13,6 +14,7 @@ from .http import request
 from .log import error, fail, info, success, warn
 from .remote import run_cmd, ssh_getsize
 from .terminal import apply_style
+from .utils import can_render_image, download_image, get_belt_hex, show_table
 
 def parse_challenge_path(challenge_id: str, challenge_data: dict = {}) -> tuple:
     if re.fullmatch(r'[\-\w]+', challenge_id):
@@ -96,6 +98,100 @@ def get_flag_size() -> int:
 
     return -1
 
+def show_list(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None, official: bool = False, simple: bool = False):
+    if not dojo_id:
+        dojos = request('/dojos', auth=False).json().get('dojos')
+        if official:
+            dojos = filter(lambda dojo: dojo['official'], dojos)
+        # TODO: sort dojos
+        render_image = not simple and can_render_image()
+        table_data = []
+        table_title = 'List of Dojos'
+        table_keys = ['id', 'award', 'name', 'description', 'modules', 'challenges']
+
+        for dojo_id in dojos:
+            if not dojo_id['award']:
+                award = None
+            elif 'belt' in dojo_id['award']:
+                if render_image:
+                    award = download_image(f'/belt/{dojo_id['award']['belt']}.svg', 'belt')
+                else:
+                    belt_hex = get_belt_hex(dojo_id['award']['belt'])
+                    award = f'[bold {belt_hex}]{dojo_id['award']['belt'].title()} Belt[/]'
+            elif 'emoji' in dojo_id['award']:
+                award = dojo_id['award']['emoji']
+
+            table_data.append({
+                'id': f'[bold cyan]{dojo_id['id']}[/]',
+                'award': award,
+                'name': f'[bold green]{dojo_id['name']}[/]',
+                'description': Markdown(dojo_id['description']) if dojo_id['description'] else None,
+                'modules': dojo_id['modules_count'],
+                'challenges': dojo_id['challenges_count']
+            })
+    elif not module_id:
+        modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
+        table_data = []
+        table_title = f'List of Modules in {dojo_id}'
+        table_keys = ['id', 'name', 'description']
+
+        for module_id in modules:
+            table_data.append({
+                'id': f'[bold cyan]{module_id['id']}[/]',
+                'name': f'[bold green]{module_id['name']}[/]',
+                'description': Markdown(module_id['description']) if module_id['description'] else None
+            })
+    elif not challenge_id:
+        modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
+        module = next(filter(lambda module: module['id'] == module_id, modules))
+        resources = list(filter(lambda resource: resource['type'] != 'header', module['resources']))
+
+        if resources:
+            resource_title = f'List of Resources in {dojo_id}/{module_id}'
+            resource_keys = ['name', 'type', 'content']
+
+            for resource in resources:
+                resource['id'] = f'[bold cyan]{resource['id']}[/]'
+                resource['name'] = f'[bold green]{resource['name']}[/]'
+                if resource['type'] == 'lecture':
+                    resource['content'] = ''
+                    if 'video' in resource:
+                        youtube_url = f'https://www.youtube.com/watch?v={resource['video']}'
+                        if 'playlist' in resource:
+                            youtube_url += f'&list={resource['playlist']}'
+                        resource['content'] += f'Video: [blue link={youtube_url}]{youtube_url}[/]\n'
+                    if 'slides' in resource:
+                        slides_url = f'https://docs.google.com/presentation/d/{resource['slides']}/embed'
+                        resource['content'] += f'Slides: [blue link={slides_url}]{slides_url}[/]\n'
+                    resource['content'] = resource['content'].strip()
+                if resource['type'] == 'markdown':
+                    resource['content'] = Markdown(resource['content'])
+                resource['type'] = resource['type'].title()
+            show_table(resources, resource_title, resource_keys, show_lines=True)
+
+        table_data = []
+        table_title = f'List of Challenges in {dojo_id}/{module_id}'
+        table_keys = ['id', 'name', 'description']
+
+        for challenge_id in module['challenges']:
+            table_data.append({
+                'id': f'[bold cyan]{challenge_id['id']}[/]',
+                'name': f'[bold green]{challenge_id['name']}[/]',
+                'description': Markdown(challenge_id['description']) if challenge_id['description'] else None
+            })
+    else:
+        modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
+        challenges = next(filter(lambda module: module['id'] == module_id, modules)).get('challenges')
+        table_data = next(filter(lambda challenge: challenge['id'] == challenge_id, challenges))
+        table_title = f'Challenge Info for {dojo_id}/{module_id}/{challenge_id}'
+        table_keys = ['id', 'name', 'description']
+
+        table_data['id'] = f'[bold cyan]{table_data['id']}[/]'
+        table_data['name'] = f'[bold green]{table_data['name']}[/]'
+        table_data['description'] = Markdown(table_data['description']) if table_data['description'] else None
+
+    show_table(table_data, table_title, table_keys, show_lines=True)
+
 def init_challenge(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None, normal: bool = False, privileged: bool = False):
     chal_data = request('/docker').json()
 
@@ -129,6 +225,48 @@ def init_challenge(dojo_id: str | None = None, module_id: str | None = None, cha
         error(response['error'])
     else:
         error('Failed to start challenge.')
+
+def init_next(normal: bool = False, privileged: bool = False):
+    if not request('/docker').json().get('success'):
+        error('No active challenge session; start a challenge!')
+
+    active_module = request('/active-module', False)
+    if active_module.is_redirect:
+        error('Please login first.')
+
+    c_next = active_module.json().get('c_next')
+    if c_next:
+        init_challenge(c_next['dojo_reference_id'], c_next['module_id'], c_next['challenge_reference_id'], normal, privileged)
+    else:
+        warn('This is the last challenge in the module.')
+
+def init_previous(normal: bool = False, privileged: bool = False):
+    if not request('/docker').json().get('success'):
+        error('No active challenge session; start a challenge!')
+
+    active_module = request('/active-module', False)
+    if active_module.is_redirect:
+        error('Please login first.')
+
+    c_previous = active_module.json().get('c_previous')
+    if c_previous:
+        init_challenge(c_previous['dojo_reference_id'], c_previous['module_id'], c_previous['challenge_reference_id'], normal, privileged)
+    else:
+        warn('This is the first challenge in the module.')
+
+def restart_challenge(normal: bool = False, privileged: bool = False):
+    if not request('/docker').json().get('success'):
+        error('No active challenge session; start a challenge!')
+
+    init_challenge(normal=normal, privileged=privileged)
+
+def show_status():
+    response = request('/docker').json()
+    if response.get('success'):
+        response.pop('success')
+        show_table(response, 'Challenge Status')
+    else:
+        fail(response.get('error'))
 
 def stop_challenge():
     response = request('/docker').json()
