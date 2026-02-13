@@ -46,6 +46,11 @@ DEFAULT_CONFIG = {
         'time': 'bold magenta',
         'url': 'bright_blue'
     },
+    'package_manager': {
+        'darwin': 'homebrew',
+        'linux': 'apt',
+        'win32': 'scoop'
+    },
     'ssh': {
         'Host': 'pwn.college',
         'HostName': 'dojo.pwn.college',

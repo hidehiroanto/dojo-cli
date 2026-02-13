@@ -512,7 +512,7 @@ def dust(
 ):
     """List the largest files in a directory, using [bold cyan]dust[/]. Helpful when clearing up space."""
 
-    run_cmd(f'dust -CFprx -n {count} {path or '~'} 2>/dev/null')
+    run_cmd(f'dust -CFprsx -n {count} {path or '~'} 2>/dev/null')
 
 @app.command(rich_help_panel='Remote Transfer')
 def cat(

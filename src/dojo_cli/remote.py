@@ -48,10 +48,17 @@ def ssh_chmod(path: Path | str, mode: int):
         sftp_client.chmod(str(path), mode)
 
 def ssh_getsize(path: Path | str) -> int:
-    stat_result = ssh_stat(path)
-    if not stat_result:
-        return -1
-    return stat_result.st_size
+    with get_sftp_client() as sftp_client:
+        try:
+            stat_result = sftp_client.stat(str(path))
+            if stat.S_ISDIR(stat_result.st_mode):
+                return sum(ssh_getsize(Path(path) / child) for child in sftp_client.listdir(str(path)))
+            elif stat.S_ISREG(stat_result.st_mode):
+                return stat_result.st_size
+            else:
+                return -1
+        except FileNotFoundError:
+            return -1
 
 def ssh_is_dir(path: Path | str) -> bool:
     stat_result = ssh_stat(path)
@@ -221,16 +228,17 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
                 sys.stdout.buffer.flush()
         else:
             channel.invoke_shell()
+            output = b''
             if payload:
                 # Wait for initial prompt
-                buffer = b''
-                while not buffer.endswith(b'$ '):
+                while not output.endswith(b'$ '):
                     if channel.recv_ready():
-                        buffer += channel.recv(1024)
+                        output += channel.recv(1024)
 
+                # If the payload contains \n, the channel echoes back the payload with \r\n
                 channel.send(payload)
-                # If the payload contains \n, the channel sends back \r\n
                 channel.recv(len(payload) + payload.count(b'\n'))
+                output = b''
 
             def resize_pty(signum, frame):
                 try:
@@ -241,7 +249,6 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
 
             signal.signal(signal.SIGWINCH, resize_pty)
             oldtty = termios.tcgetattr(sys.stdin)
-            output = b''
             try:
                 tty.setraw(sys.stdin.fileno())
                 tty.setcbreak(sys.stdin.fileno())
