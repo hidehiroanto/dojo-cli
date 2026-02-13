@@ -23,9 +23,8 @@ from .log import error, info, success, warn
 from .terminal import apply_style
 
 BUFFER_SIZE = 1024
-DEFAULT_TERMINAL = 'xterm-256color'
-DEFAULT_TERMINAL_WIDTH = 80
-DEFAULT_TERMINAL_HEIGHT = 24
+DEFAULT_PTY_SIZE = (80, 24)
+DEFAULT_TERM = 'xterm-256color'
 
 ssh_client = None
 
@@ -217,28 +216,26 @@ def run_openssh(command: str | None = None, capture_output: bool = False, payloa
 def run_paramiko(command: str | None = None, capture_output: bool = False, payload: bytes | None = None) -> bytes | None:
     with get_ssh_client().get_transport().open_session() as channel:
         try:
-            width, height = os.get_terminal_size()
+            channel.get_pty(DEFAULT_TERM, *os.get_terminal_size())
         except OSError:
-            width, height = DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
-        channel.get_pty(DEFAULT_TERMINAL, width, height)
+            channel.get_pty(DEFAULT_TERM, *DEFAULT_PTY_SIZE)
+
+        def resize_pty(signum, frame):
+            try:
+                channel.resize_pty(*os.get_terminal_size())
+            except OSError:
+                pass
+
+        signal.signal(signal.SIGWINCH, resize_pty)
+        output = b''
 
         if command:
             channel.exec_command(command)
-            with channel.makefile_stdin('wb') as stdin:
-                if payload:
-                    stdin.write(payload)
-            with channel.makefile('rb') as stdout, channel.makefile_stderr('rb') as stderr:
-                output, err = stdout.read(), stderr.read()
-            sys.stderr.buffer.write(err)
-            sys.stderr.buffer.flush()
-            if capture_output:
-                return output
-            else:
-                sys.stdout.buffer.write(output)
-                sys.stdout.buffer.flush()
+            if payload:
+                channel.sendall(payload)
+
         else:
             channel.invoke_shell()
-            output = b''
             if payload:
                 # Wait for initial prompt
                 while not output.endswith(b'$ '):
@@ -246,47 +243,42 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
                         output += channel.recv(BUFFER_SIZE)
 
                 # If the payload contains \n, the channel echoes back the payload with \r\n
-                channel.send(payload)
+                channel.sendall(payload)
                 channel.recv(len(payload) + payload.count(b'\n'))
                 output = b''
 
-            def resize_pty(signum, frame):
-                try:
-                    width, height = os.get_terminal_size()
-                    channel.resize_pty(width, height)
-                except OSError:
-                    pass
+        oldtty = termios.tcgetattr(sys.stdin)
+        try:
+            if not capture_output:
+                success('Connected!')
+            tty.setraw(sys.stdin.fileno())
+            tty.setcbreak(sys.stdin.fileno())
+            channel.settimeout(0.0)
 
-            signal.signal(signal.SIGWINCH, resize_pty)
-            oldtty = termios.tcgetattr(sys.stdin)
-            try:
-                tty.setraw(sys.stdin.fileno())
-                tty.setcbreak(sys.stdin.fileno())
-                channel.settimeout(0.0)
-                while True:
-                    rlist = select.select([channel, sys.stdin], [], [])[0]
-                    if channel in rlist:
-                        try:
-                            data = channel.recv(BUFFER_SIZE)
-                            if not data:
-                                break
-                            if capture_output:
-                                output += data
-                            else:
-                                sys.stdout.buffer.write(data)
-                                sys.stdout.buffer.flush()
-                        except TimeoutError:
-                            pass
-                    if sys.stdin in rlist:
-                        data = os.read(sys.stdin.fileno(), BUFFER_SIZE)
+            while True:
+                rlist = select.select([channel, sys.stdin], [], [])[0]
+                if channel in rlist:
+                    try:
+                        data = channel.recv(BUFFER_SIZE)
                         if not data:
                             break
-                        channel.send(data)
-            finally:
-                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
+                        if capture_output:
+                            output += data
+                        else:
+                            sys.stdout.buffer.write(data)
+                            sys.stdout.buffer.flush()
+                    except TimeoutError:
+                        pass
+                if sys.stdin in rlist:
+                    data = os.read(sys.stdin.fileno(), BUFFER_SIZE)
+                    if not data:
+                        break
+                    channel.sendall(data)
+        finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
 
-            if capture_output:
-                return output
+        if capture_output:
+            return output
 
 def run_cmd(command: str | None = None, capture_output: bool = False, payload: bytes | None = None, client: str = 'paramiko') -> bytes | None:
     """Run a command on the remote server. If capture_output is True, the standard out bytes are returned."""

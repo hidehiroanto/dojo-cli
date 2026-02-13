@@ -12,6 +12,7 @@ from getpass import getpass
 from pathlib import Path
 from requests import Session
 from rich.markdown import Markdown
+import shlex
 from typer import Argument, Option, Typer
 from typing import Annotated
 
@@ -74,7 +75,7 @@ def logout():
 
 @app.command(rich_help_panel='Account')
 def keygen():
-    """Generate an SSH key for the dojo and add it to the account."""
+    """Generate an SSH key for the dojo and add it to user settings."""
 
     ssh_keygen()
 
@@ -441,18 +442,16 @@ def status():
         fail(response.get('error'))
 
 @app.command(rich_help_panel='Remote Connection')
-def connect(
-    shell: Annotated[str | None, Option('-s', '--shell', help='The shell to launch.')] = None
-):
+def connect():
     """Connect to the current challenge via an interactive remote shell (bash by default)."""
 
-    run_cmd(payload=f'exec {shell}\n'.encode() if shell else None)
+    run_cmd()
 
 @app.command(rich_help_panel='Remote Connection')
 def fish():
     """Connect to the current challenge via fish."""
 
-    run_cmd(payload=b'exec fish -l\n')
+    run_cmd('fish -l')
 
 @app.command(rich_help_panel='Remote Connection')
 def nu(
@@ -461,30 +460,30 @@ def nu(
 ):
     """Connect to the current challenge via nushell."""
 
-    payload = 'exec nu -l'
+    nu_argv = ['nu', '-l']
     if commands is not None:
-        payload += f' -c {repr(commands)}'
+        nu_argv += ['-c', commands]
     if execute_commands is not None:
-        payload += f' -e {repr(execute_commands)}'
-    run_cmd(payload=payload.encode() + b'\n')
+        nu_argv += ['-e', execute_commands]
+    run_cmd(shlex.join(nu_argv))
 
 @app.command(rich_help_panel='Remote Connection')
 def tmux():
     """Connect to the current challenge via tmux."""
 
-    run_cmd(payload=b'exec tmux -l\n')
+    run_cmd('tmux -l')
 
 @app.command(rich_help_panel='Remote Connection')
 def zellij():
     """Connect to the current challenge via zellij."""
 
-    run_cmd(payload=b'exec zellij\n')
+    run_cmd('zellij')
 
 @app.command(rich_help_panel='Remote Connection')
 def zsh():
     """Connect to the current challenge via zsh."""
 
-    run_cmd(payload=b'exec zsh -l\n')
+    run_cmd('zsh -l')
 
 @app.command('ssh', help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
 @app.command(help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')

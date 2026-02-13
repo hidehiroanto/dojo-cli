@@ -220,7 +220,7 @@ def upload_zed_server():
         zed_server_data = gzip.decompress(requests.get(zed_asset['browser_download_url']).content)
 
         # Check if enough disk space is available
-        du_query = run_cmd(f'du -bs {home_dir}', True) or b'0' # ssh_getsize(home_dir)
+        du_query = run_cmd(f'du -bs {home_dir} 2>/dev/null', True) or b'0' # ssh_getsize(home_dir)
         if len(zed_server_data) - ssh_getsize(zed_server_dir) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
             error('Not enough disk space to update zed-remote-server')
 
@@ -258,7 +258,7 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
             lang_server_data = tar_member.read() if tar_member else b''
 
         # Check if enough disk space is available
-        du_query = run_cmd(f'du -bs {home_dir}', True) or b'0' # ssh_getsize(home_dir)
+        du_query = run_cmd(f'du -bs {home_dir} 2>/dev/null', True) or b'0' # ssh_getsize(home_dir)
         if len(lang_server_data) - ssh_getsize(lang_dir / lang_server) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
             error('Not enough disk space to update language server')
 

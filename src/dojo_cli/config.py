@@ -48,7 +48,7 @@ DEFAULT_CONFIG = {
     },
     'package_manager': {
         'darwin': 'homebrew',
-        'linux': 'apt',
+        'linux': 'homebrew',
         'win32': 'scoop'
     },
     'ssh': {
