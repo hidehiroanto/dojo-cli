@@ -17,7 +17,7 @@ import tempfile
 from .config import load_user_config
 from .http import request
 from .log import error, info, success
-from .remote import run_cmd, ssh_listdir, ssh_mkdir, ssh_remove, ssh_rmdir, transfer
+from .remote import run_cmd, ssh_listdir, ssh_mkdir, ssh_remove, ssh_rmdir, upload_file
 
 # use zerobrew or wax instead of homebrew?
 def homebrew_upgrade(formulae: list):
@@ -119,11 +119,12 @@ def upload_lang_server(lang_server: str, home_dir: Path = Path('/home/hacker')):
             ssh_rmdir(lang_dir / lang_server / version)
         ssh_mkdir(lang_server_dir)
 
-        with tempfile.NamedTemporaryFile() as f:
-            Path(f.name).chmod(0o755)
-            f.write(lang_server_data)
-            f.flush()
-            transfer(f.name, lang_server_dir / lang_server, True)
+        with tempfile.NamedTemporaryFile() as temp_file:
+            temp_file.write(lang_server_data)
+            temp_file.flush()
+            temp_path = Path(temp_file.name)
+            temp_path.chmod(0o755)
+            upload_file(temp_path, lang_server_dir / lang_server)
 
         success(f'Updated {lang_server} to version {latest['name']}')
 
@@ -175,11 +176,12 @@ def upload_zed_server(use_lang_servers: bool = False):
         for version in zed_versions:
             ssh_remove(zed_server_dir / version)
 
-        with tempfile.NamedTemporaryFile() as f:
-            Path(f.name).chmod(0o755)
-            f.write(zed_server_data)
-            f.flush()
-            transfer(f.name, zed_server_dir / zed_server, True)
+        with tempfile.NamedTemporaryFile() as temp_file:
+            temp_file.write(zed_server_data)
+            temp_file.flush()
+            temp_path = Path(temp_file.name)
+            temp_path.chmod(0o755)
+            upload_file(temp_path, zed_server_dir / zed_server)
 
         success(f'Updated zed-remote-server to version {zed_semver}')
 

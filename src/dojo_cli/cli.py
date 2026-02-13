@@ -10,24 +10,21 @@ This is the main command line interface file.
 import datetime
 from getpass import getpass
 from pathlib import Path
-import os
 from requests import Session
 from rich.markdown import Markdown
 from typer import Argument, Option, Typer
 from typing import Annotated
 
+from .challenge import init_challenge, show_hint, stop_challenge, submit_flag
 from .config import DEFAULT_CONFIG_PATH, load_user_config, show_config
 from .http import delete_cookie, request, save_cookie
 from .log import error, fail, info, success, warn
-from .remote import print_file, run_cmd, ssh_is_dir, ssh_is_file, ssh_keygen, transfer
+from .remote import download_file, print_file, run_cmd, ssh_keygen, upload_file
 from .sensai import init_sensai
 from .terminal import apply_style
 from .tui import init_tui
-from .utils import (
-    can_render_image, download_image,
-    get_belt_hex, get_challenge_id, get_rank, get_wechall_rankings,
-    parse_challenge_path, show_hint, show_table, submit_flag
-)
+from .utils import can_render_image, download_image, get_belt_hex, get_rank, get_wechall_rankings, show_table
+
 from .zed import init_zed
 
 app = Typer(
@@ -140,17 +137,17 @@ def whois(
 
 @app.command(rich_help_panel='User Info')
 def scoreboard(
-    dojo: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
+    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
     duration: Annotated[str, Option('-t', '--duration', help='Scoreboard duration (week, month, all)')] = 'all',
     page: Annotated[int, Option('-p', '--page', help='Scoreboard page')] = 1,
     simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
 ):
     """Show scoreboard for a dojo or module. If no dojo is given, show WeChall global scoreboard."""
 
-    if dojo:
+    if dojo_id:
         durations = {'week': 7, 'month': 30, 'all': 0}
-        endpoint = f'/scoreboard/{dojo}/{module or '_'}/{durations.get(duration.lower(), 0)}/{page}'
+        endpoint = f'/scoreboard/{dojo_id}/{module_id or '_'}/{durations.get(duration.lower(), 0)}/{page}'
         standings = request(endpoint, auth=False).json().get('standings')
         images = {}
         render_image = not simple and can_render_image()
@@ -176,7 +173,7 @@ def scoreboard(
                 row['belt'] = f'[bold {belt_hex}]{belt.title()}[/]'
                 row['role'] = 'ASU Student' if symbol == 'fork' else symbol.title()
 
-        title = f'Scoreboard for [bold]{f'{dojo}/{module}' if module else dojo}[/]'
+        title = f'Scoreboard for [bold]{f'{dojo_id}/{module_id}' if module_id else dojo_id}[/]'
         show_table(standings, title, ['rank', 'role', 'handle', 'belt', 'badges', 'solves'])
 
     else:
@@ -189,6 +186,7 @@ def belts(
     simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
 ):
     """Show all the users who have earned belts above white belt."""
+
     response = request('/belts', auth=False).json()
 
     render_image = not simple and can_render_image()
@@ -234,63 +232,116 @@ def belts(
         belts = belts[page * 20:][:20]
     show_table(belts, title, ['rank', 'id', 'handle', 'belt', 'website', 'date_ascended'])
 
-# TODO: add belts/emojis, personal and global solve counts
+# TODO: add belts/emojis, solve state, personal and global solve counts
 @app.command(help='An alias for [bold cyan]list[/].', rich_help_panel='Challenge Info')
 @app.command('list', rich_help_panel='Challenge Info')
 def ls(
-    dojo: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None
+    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None,
+    official: Annotated[bool, Option('-o', '--official', help='Filter to official dojos')] = False,
+    simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
 ):
     """List the members of a dojo or module. If no dojo is given, display all dojos."""
 
-    if not dojo:
+    if not dojo_id:
         dojos = request('/dojos', auth=False).json().get('dojos')
+        if official:
+            dojos = filter(lambda dojo: dojo['official'], dojos)
+        # TODO: sort dojos
+        render_image = not simple and can_render_image()
         table_data = []
         table_title = 'List of Dojos'
-        for dojo in dojos:
+        table_keys = ['id', 'award', 'name', 'description', 'modules', 'challenges']
+
+        for dojo_id in dojos:
+            if not dojo_id['award']:
+                award = None
+            elif 'belt' in dojo_id['award']:
+                if render_image:
+                    award = download_image(f'/belt/{dojo_id['award']['belt']}.svg', 'belt')
+                else:
+                    belt_hex = get_belt_hex(dojo_id['award']['belt'])
+                    award = f'[bold {belt_hex}]{dojo_id['award']['belt'].title()} Belt[/]'
+            elif 'emoji' in dojo_id['award']:
+                award = dojo_id['award']['emoji']
+
             table_data.append({
-                'id': f'[bold cyan]{dojo['id']}[/]',
-                'name': f'[bold green]{dojo['name']}[/]',
-                'description': Markdown(dojo['description'] or 'N/A')
+                'id': f'[bold cyan]{dojo_id['id']}[/]',
+                'award': award,
+                'name': f'[bold green]{dojo_id['name']}[/]',
+                'description': Markdown(dojo_id['description']) if dojo_id['description'] else None,
+                'modules': dojo_id['modules_count'],
+                'challenges': dojo_id['challenges_count']
             })
-    elif not module:
-        modules = request(f'/dojos/{dojo}/modules', auth=False).json().get('modules')
+    elif not module_id:
+        modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
         table_data = []
-        table_title = f'List of Modules in {dojo}'
-        for module in modules:
+        table_title = f'List of Modules in {dojo_id}'
+        table_keys = ['id', 'name', 'description']
+
+        for module_id in modules:
             table_data.append({
-                'id': f'[bold cyan]{module['id']}[/]',
-                'name': f'[bold green]{module['name']}[/]',
-                'description': Markdown(module['description'] or 'N/A')
+                'id': f'[bold cyan]{module_id['id']}[/]',
+                'name': f'[bold green]{module_id['name']}[/]',
+                'description': Markdown(module_id['description']) if module_id['description'] else None
             })
-    elif not challenge:
-        modules = request(f'/dojos/{dojo}/modules', auth=False).json().get('modules')
-        challenges = next(m for m in modules if m['id'] == module).get('challenges')
+    elif not challenge_id:
+        modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
+        module = next(filter(lambda module: module['id'] == module_id, modules))
+        resources = list(filter(lambda resource: resource['type'] != 'header', module['resources']))
+
+        if resources:
+            resource_title = f'List of Resources in {dojo_id}/{module_id}'
+            resource_keys = ['name', 'type', 'content']
+
+            for resource in resources:
+                resource['id'] = f'[bold cyan]{resource['id']}[/]'
+                resource['name'] = f'[bold green]{resource['name']}[/]'
+                if resource['type'] == 'lecture':
+                    resource['content'] = ''
+                    if 'video' in resource:
+                        youtube_url = f'https://www.youtube.com/watch?v={resource['video']}'
+                        if 'playlist' in resource:
+                            youtube_url += f'&list={resource['playlist']}'
+                        resource['content'] += f'Video: [blue link={youtube_url}]{youtube_url}[/]\n'
+                    if 'slides' in resource:
+                        slides_url = f'https://docs.google.com/presentation/d/{resource['slides']}/embed'
+                        resource['content'] += f'Slides: [blue link={slides_url}]{slides_url}[/]\n'
+                    resource['content'] = resource['content'].strip()
+                if resource['type'] == 'markdown':
+                    resource['content'] = Markdown(resource['content'])
+                resource['type'] = resource['type'].title()
+            show_table(resources, resource_title, resource_keys, show_lines=True)
+
         table_data = []
-        table_title = f'List of Challenges in {dojo}/{module}'
-        for challenge in challenges:
+        table_title = f'List of Challenges in {dojo_id}/{module_id}'
+        table_keys = ['id', 'name', 'description']
+
+        for challenge_id in module['challenges']:
             table_data.append({
-                'id': f'[bold cyan]{challenge['id']}[/]',
-                'name': f'[bold green]{challenge['name']}[/]',
-                'description': Markdown(challenge['description'] or 'N/A')
+                'id': f'[bold cyan]{challenge_id['id']}[/]',
+                'name': f'[bold green]{challenge_id['name']}[/]',
+                'description': Markdown(challenge_id['description']) if challenge_id['description'] else None
             })
     else:
-        modules = request(f'/dojos/{dojo}/modules', auth=False).json().get('modules')
-        challenges = next(m for m in modules if m['id'] == module).get('challenges')
-        table_data = next(c for c in challenges if c['id'] == challenge)
-        table_title = f'Challenge Info for {dojo}/{module}/{challenge}'
+        modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
+        challenges = next(filter(lambda module: module['id'] == module_id, modules)).get('challenges')
+        table_data = next(filter(lambda challenge: challenge['id'] == challenge_id, challenges))
+        table_title = f'Challenge Info for {dojo_id}/{module_id}/{challenge_id}'
+        table_keys = ['id', 'name', 'description']
+
         table_data['id'] = f'[bold cyan]{table_data['id']}[/]'
         table_data['name'] = f'[bold green]{table_data['name']}[/]'
-        table_data['description'] = Markdown(table_data['description'] or 'N/A')
+        table_data['description'] = Markdown(table_data['description']) if table_data['description'] else None
 
-    show_table(table_data, table_title, ['id', 'name', 'description'])
+    show_table(table_data, table_title, table_keys, show_lines=True)
 
 # @app.command(rich_help_panel='Challenge Info')
 def tree(
-    dojo: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None
+    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None
 ):
     """Display the children of a dojo or module in a tree. If no dojo is given, display a tree of all dojos."""
 
@@ -299,9 +350,9 @@ def tree(
 
 @app.command(short_help='Start a new challenge.', rich_help_panel='Challenge Launch')
 def start(
-    dojo: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None,
+    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None,
     normal: Annotated[bool, Option('-n', '--normal', help='Start in normal mode')] = False,
     privileged: Annotated[bool, Option('-p', '--practice', '--privileged', help='Start in privileged mode')] = False
 ):
@@ -315,38 +366,7 @@ def start(
     If neither --normal nor --privileged are given, start in the current mode if a challenge is running, otherwise start in normal mode.
     """
 
-    chal_data = request('/docker').json()
-
-    if not challenge:
-        if chal_data['success']:
-            dojo, module, challenge = chal_data['dojo'], chal_data['module'], chal_data['challenge']
-        else:
-            error('No active challenge session; please specify a challenge ID!')
-    elif not dojo or not module:
-        challenge_path = parse_challenge_path(challenge, chal_data)
-        if len(challenge_path) == 3 and all(isinstance(s, str) for s in challenge_path):
-            dojo, module, challenge = challenge_path
-        else:
-            error('Could not parse challenge ID.')
-
-    if get_challenge_id(dojo, module, challenge) == -1:
-        error('Challenge does not exist.')
-
-    if privileged:
-        practice = True
-    elif normal:
-        practice = False
-    else:
-        practice = chal_data.get('practice', False)
-
-    request_json = {'dojo': dojo, 'module': module, 'challenge': challenge, 'practice': practice}
-    response = request('/docker', csrf=True, json=request_json).json()
-    if response.get('success'):
-        success('Challenge started successfully!')
-    elif response.get('error'):
-        error(response['error'])
-    else:
-        error('Failed to start challenge.')
+    init_challenge(dojo_id, module_id, challenge_id, normal, privileged)
 
 @app.command('next', rich_help_panel='Challenge Launch')
 def start_next(
@@ -364,7 +384,7 @@ def start_next(
 
     c_next = active_module.json().get('c_next')
     if c_next:
-        start(c_next['dojo_reference_id'], c_next['module_id'], c_next['challenge_reference_id'], normal, privileged)
+        init_challenge(c_next['dojo_reference_id'], c_next['module_id'], c_next['challenge_reference_id'], normal, privileged)
     else:
         warn('This is the last challenge in the module.')
 
@@ -385,7 +405,7 @@ def previous(
 
     c_previous = active_module.json().get('c_previous')
     if c_previous:
-        start(c_previous['dojo_reference_id'], c_previous['module_id'], c_previous['challenge_reference_id'], normal, privileged)
+        init_challenge(c_previous['dojo_reference_id'], c_previous['module_id'], c_previous['challenge_reference_id'], normal, privileged)
     else:
         warn('This is the first challenge in the module.')
 
@@ -399,23 +419,14 @@ def restart(
     if not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
 
-    start(normal=normal, privileged=privileged)
+    init_challenge(normal=normal, privileged=privileged)
 
 # maybe implement a backend option so it works in normal mode
 @app.command(rich_help_panel='Challenge Launch')
 def stop():
     """Stop the current challenge. Only works in privileged mode for now."""
 
-    response = request('/docker').json()
-    if response.get('success'):
-        if response.get('practice'):
-            run_cmd('sudo kill 1', True)
-            if not request('/docker').json().get('success'):
-                success('Challenge stopped successfully!')
-        else:
-            error('Challenge is in normal mode, cannot stop container without root privileges.')
-    else:
-        error('No active challenge session; start a challenge!')
+    stop_challenge()
 
 @app.command('ps', help='An alias for [bold cyan]status[/].', rich_help_panel='Challenge Status')
 @app.command(rich_help_panel='Challenge Status')
@@ -522,22 +533,7 @@ def download(
     By default, it downloads the file to the current working directory.
     """
 
-    if 'DOJO_AUTH_TOKEN' in os.environ:
-        error('Please run this locally instead of on the dojo.')
-
-    if not ssh_is_file(remote_path):
-        error('Remote path is not a file.')
-
-    if not local_path:
-        local_path = Path.cwd()
-
-    local_path = local_path.expanduser()
-
-    if local_path.is_dir():
-        local_path /= remote_path.name
-
-    transfer(remote_path, local_path)
-    success(f'Downloaded {remote_path} to {local_path}')
+    download_file(remote_path, local_path)
 
 @app.command('up', help='An alias for [bold cyan]upload[/].', rich_help_panel='Remote Transfer')
 @app.command(rich_help_panel='Remote Transfer')
@@ -550,41 +546,22 @@ def upload(
     By default, it uploads the file to the configured SSH project path.
     """
 
-    if 'DOJO_AUTH_TOKEN' in os.environ:
-        error('Please run this locally instead of on the dojo.')
-
-    local_path = local_path.expanduser()
-
-    if not local_path.is_file():
-        error('Provided path is not a file.')
-
-    if not remote_path:
-        remote_path = Path(load_user_config()['ssh']['project_path'])
-
-    if not ssh_is_file(remote_path):
-        if ssh_is_dir(remote_path):
-            remote_path /= local_path.name
-        elif not ssh_is_dir(remote_path.parent):
-            # ssh_mkdir(remote_path.parent)
-            run_cmd(f'mkdir -p {remote_path.parent}')
-
-    transfer(local_path, remote_path, True)
-    success(f'Uploaded {local_path} to {remote_path}')
+    upload_file(local_path, remote_path)
 
 @app.command(rich_help_panel='Remote Coding')
 def zed(
-    upgrade_zed: Annotated[bool, Option('-u', '--upgrade', help='Upgrade zed to the latest version.')] = False,
-    use_lang_servers: Annotated[bool, Option('-l', '--lsp', help='Use ruff and ty, upgrade if necessary.')] = False
+    upgrade_zed: Annotated[bool, Option('-u', '--upgrade', help='Upgrade Zed to the latest version.')] = False,
+    use_lang_servers: Annotated[bool, Option('-l', '--lsp', help='Use ruff (linter) and ty (type checker) from astral.sh, upgrade if necessary.')] = False
 ):
-    """Open the Zed code editor and connect to the current challenge."""
+    """Open Zed, a minimal code editor written in Rust, and connect remotely to the current challenge."""
 
     init_zed(upgrade_zed, use_lang_servers)
 
 @app.command(short_help="Show a hint for a challenge's flag.", rich_help_panel='Flag Submission')
 def hint(
-    dojo: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None
+    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None
 ):
     """
     Show a hint for a challenge's flag.
@@ -593,15 +570,15 @@ def hint(
     If no challenge is given, the hint will be provided for the current challenge's flag.
     """
 
-    show_hint(dojo, module, challenge)
+    show_hint(dojo_id, module_id, challenge_id)
 
 @app.command('submit', help='An alias for [bold cyan]solve[/].', rich_help_panel='Flag Submission')
 @app.command(short_help='Submit a flag for a challenge.', rich_help_panel='Flag Submission')
 def solve(
     flag: Annotated[str | None, Option('-f', '--flag', help='Flag to submit.')] = None,
-    dojo: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None,
+    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None,
 ):
     """
     Submit a flag for a challenge. Warns if flag is for wrong user or challenge.
@@ -610,7 +587,7 @@ def solve(
     If no challenge is given, the flag will be submitted for the current challenge.
     """
 
-    submit_flag(flag, dojo, module, challenge)
+    submit_flag(flag, dojo_id, module_id, challenge_id)
 
 @app.command(rich_help_panel='Configuration')
 def config(

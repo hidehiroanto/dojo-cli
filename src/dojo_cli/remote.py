@@ -70,6 +70,8 @@ def ssh_listdir(path: Path | str) -> list[str]:
         return sftp_client.listdir(str(path))
 
 def ssh_mkdir(path: Path | str):
+    """This is identical to running f'mkdir -p {path}' remotely."""
+
     with get_sftp_client() as sftp_client:
         for parent in Path(path).parents[::-1]:
             if not ssh_is_dir(parent):
@@ -85,6 +87,8 @@ def ssh_remove(path: Path | str):
         sftp_client.remove(str(path))
 
 def ssh_rmdir(path: Path | str):
+    """This is identical to running f'rm -r {path}' remotely."""
+
     with get_sftp_client() as sftp_client:
         for child in sftp_client.listdir(str(path)):
             child_path = Path(path) / child
@@ -142,14 +146,15 @@ def ssh_keygen():
     if Path(user_config['cookie_path']).expanduser().is_file():
         response = request('/ssh_key', json={'ssh_key': public_key}).json()
         if response['success']:
-            success('Successfully added public key to settings. You can now start a challenge and connect to the remote server.')
+            success('Successfully added public key to settings.')
+            success('You can now connect to the remote server after starting a challenge.')
         else:
             error(f'Something went wrong: {response['error']}')
     else:
         ssh_key_url = f'{user_config['base_url']}/settings#ssh-key'
         info(f'Public key: [bold cyan]{public_key}[/]')
         info('Not logged in, could not automatically add the public key to your pwn.college account.')
-        info(f'Log into pwn.college using a browser and navigate to [cyan link={ssh_key_url}]{ssh_key_url}[/].')
+        info(f'Log into pwn.college using a browser and navigate to {apply_style(ssh_key_url)}.')
         info('Enter the above key into the [bold cyan]Add New SSH Key[/] field, and click [bold cyan]Add[/].')
 
 def print_file(path: Path):
@@ -217,7 +222,7 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
         else:
             channel.invoke_shell()
             if payload:
-                # wait for initial prompt
+                # Wait for initial prompt
                 buffer = b''
                 while not buffer.endswith(b'$ '):
                     if channel.recv_ready():
@@ -282,11 +287,49 @@ def run_cmd(command: str | None = None, capture_output: bool = False, payload: b
         else:
             error(f'Invalid client: {client}')
 
-def transfer(src_path: Path | str, dst_path: Path | str, upload: bool = False):
+def download_file(remote_path: Path, local_path: Path | None = None):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
 
+    if not ssh_is_file(remote_path):
+        error('Remote path is not a file.')
+
+    if not local_path:
+        local_path = Path.cwd()
+
+    local_path = local_path.expanduser()
+
+    if local_path.is_dir():
+        local_path /= remote_path.name
+
     with get_sftp_client() as sftp_client:
-        getattr(sftp_client, 'put' if upload else 'get')(str(src_path), str(dst_path))
+        sftp_client.get(str(remote_path), str(local_path))
+
+    success(f'Downloaded {remote_path} to {local_path}')
+
+def upload_file(local_path: Path, remote_path: Path | None = None):
+    if 'DOJO_AUTH_TOKEN' in os.environ:
+        error('Please run this locally instead of on the dojo.')
+    if not request('/docker').json().get('success'):
+        error('No active challenge session; start a challenge!')
+
+    local_path = local_path.expanduser()
+
+    if not local_path.is_file():
+        error('Provided path is not a file.')
+
+    if not remote_path:
+        remote_path = Path(load_user_config()['ssh']['project_path'])
+
+    if not ssh_is_file(remote_path):
+        if ssh_is_dir(remote_path):
+            remote_path /= local_path.name
+        elif not ssh_is_dir(remote_path.parent):
+            ssh_mkdir(remote_path.parent)
+
+    with get_sftp_client() as sftp_client:
+        sftp_client.put(str(local_path), str(remote_path))
+
+    success(f'Uploaded {local_path} to {remote_path}')
