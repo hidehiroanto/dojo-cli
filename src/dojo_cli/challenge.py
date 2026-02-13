@@ -185,13 +185,13 @@ def submit_flag(flag: str | None = None, dojo_id: str | None = None, module_id: 
     if isinstance(payload, list) and len(payload) == 2 and all(isinstance(i, int) for i in payload):
         if payload[0] != account_id:
             warn('This flag is from another account! Are you sure you want to submit?')
-            if input('(y/N) > ').strip()[0].lower() != 'y':
+            if input('(y/N) > ').strip()[:1].lower() != 'y':
                 warn('Aborting flag submission attempt!')
                 return
 
         if payload[1] != challenge_num_id:
             warn('This flag is from another challenge! Are you sure you want to submit?')
-            if input('(y/N) > ').strip()[0].lower() != 'y':
+            if input('(y/N) > ').strip()[:1].lower() != 'y':
                 warn('Aborting flag submission attempt!')
                 return
 
@@ -205,13 +205,13 @@ def submit_flag(flag: str | None = None, dojo_id: str | None = None, module_id: 
         partial_flag_mismatch = re.fullmatch(r'[\-\.\w]+', flag) and len(f'pwn.college{{{flag}}}') != flag_length
         if full_flag_mismatch or partial_flag_mismatch:
             warn(f'This flag is the wrong size! The real flag length is {flag_length}. Are you sure you want to submit?')
-            if input('(y/N) > ').strip()[0].lower() != 'y':
+            if input('(y/N) > ').strip()[:1].lower() != 'y':
                 warn('Aborting flag submission attempt!')
                 return
 
     else:
         warn('Could not deserialize flag. Are you sure you want to submit?')
-        if input('(y/N) > ').strip()[0].lower() != 'y':
+        if input('(y/N) > ').strip()[:1].lower() != 'y':
             warn('Aborting flag submission attempt!')
             return
 

@@ -59,7 +59,6 @@ DEFAULT_CONFIG = {
         'IdentityFile': '~/.ssh/id_ed25519',
         'ServerAliveInterval': 20,
         'ServerAliveCountMax': 3,
-        'algorithm': 'ed25519',
         'config_file': '~/.ssh/config',
         'project_path': '/home/hacker'
     },

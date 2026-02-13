@@ -2,6 +2,8 @@
 Handles remote SSH connections.
 """
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
 import os
 from paramiko.client import AutoAddPolicy, SSHClient
 from paramiko.sftp_client import SFTPClient
@@ -19,6 +21,11 @@ from .config import load_user_config
 from .http import request
 from .log import error, info, success, warn
 from .terminal import apply_style
+
+BUFFER_SIZE = 1024
+DEFAULT_TERMINAL = 'xterm-256color'
+DEFAULT_TERMINAL_WIDTH = 80
+DEFAULT_TERMINAL_HEIGHT = 24
 
 ssh_client = None
 
@@ -116,26 +123,29 @@ def ssh_keygen():
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
 
-    ssh_keygen = Path(which('ssh-keygen') or '/usr/bin/ssh-keygen')
-    if not ssh_keygen.is_file():
-        error('Please install ssh-keygen first.')
-
     user_config = load_user_config()
     ssh_config = user_config['ssh']
     ssh_config_file = Path(ssh_config['config_file']).expanduser()
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser()
+    ssh_public_identity_file = ssh_identity_file.parent.joinpath(f'{ssh_identity_file.name}.pub')
 
     if ssh_identity_file.is_file():
         warn(f'Identity file already exists at {ssh_identity_file}, override?')
-        if input('(y/N) > ').strip()[0].lower() != 'y':
+        if input('(y/N) > ').strip()[:1].lower() != 'y':
             warn('Aborting SSH key generation!')
             return
 
-    subprocess.run([ssh_keygen, '-N', '', '-f', ssh_identity_file, '-t', ssh_config['algorithm']])
+    private_key = Ed25519PrivateKey.generate()
+    ssh_identity_file.touch(0o600)
+    ssh_identity_file.write_bytes(private_key.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption()))
+    success(f'Saved SSH private key to {apply_style(ssh_identity_file)}.')
 
-    if not ssh_config_file.is_file():
-        ssh_config_file.touch(0o644)
+    public_key = private_key.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode()
+    ssh_public_identity_file.touch(0o644)
+    ssh_public_identity_file.write_text(public_key)
+    success(f'Saved SSH public key to {apply_style(ssh_public_identity_file)}.')
 
+    ssh_config_file.touch(0o644)
     ssh_config_data = ssh_config_file.read_text()
     if f'Host {ssh_config['Host']}' not in ssh_config_data:
         if ssh_config_data:
@@ -148,21 +158,21 @@ def ssh_keygen():
         ssh_config_data += f'  ServerAliveCountMax {ssh_config['ServerAliveCountMax']}\n'
         ssh_config_data += f'  ServerAliveInterval {ssh_config['ServerAliveInterval']}\n'
         ssh_config_file.write_text(ssh_config_data)
+        info(f'Updated SSH configuration at {apply_style(ssh_config_file)}.')
 
-    public_key = (ssh_identity_file.parent / (ssh_identity_file.name + '.pub')).read_text()
     if Path(user_config['cookie_path']).expanduser().is_file():
         response = request('/ssh_key', json={'ssh_key': public_key}).json()
         if response['success']:
-            success('Successfully added public key to settings.')
+            success('Successfully added public key to user settings.')
             success('You can now connect to the remote server after starting a challenge.')
         else:
             error(f'Something went wrong: {response['error']}')
     else:
         ssh_key_url = f'{user_config['base_url']}/settings#ssh-key'
         info(f'Public key: [bold cyan]{public_key}[/]')
-        info('Not logged in, could not automatically add the public key to your pwn.college account.')
-        info(f'Log into pwn.college using a browser and navigate to {apply_style(ssh_key_url)}.')
-        info('Enter the above key into the [bold cyan]Add New SSH Key[/] field, and click [bold cyan]Add[/].')
+        info('Not logged in, could not automatically add the public key to your user settings.')
+        info(f'Use a browser to log into {apply_style(user_config['base_url'])} and navigate to {apply_style(ssh_key_url)}.')
+        info('Enter the above key into the [bold cyan]Add New SSH Key[/] field, and then click [bold cyan]Add[/].')
 
 def print_file(path: Path):
     if ssh_is_dir(path):
@@ -209,8 +219,8 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
         try:
             width, height = os.get_terminal_size()
         except OSError:
-            width, height = 80, 24
-        channel.get_pty('xterm-256color', width, height)
+            width, height = DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
+        channel.get_pty(DEFAULT_TERMINAL, width, height)
 
         if command:
             channel.exec_command(command)
@@ -233,7 +243,7 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
                 # Wait for initial prompt
                 while not output.endswith(b'$ '):
                     if channel.recv_ready():
-                        output += channel.recv(1024)
+                        output += channel.recv(BUFFER_SIZE)
 
                 # If the payload contains \n, the channel echoes back the payload with \r\n
                 channel.send(payload)
@@ -257,7 +267,7 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
                     rlist = select.select([channel, sys.stdin], [], [])[0]
                     if channel in rlist:
                         try:
-                            data = channel.recv(1024)
+                            data = channel.recv(BUFFER_SIZE)
                             if not data:
                                 break
                             if capture_output:
@@ -268,7 +278,7 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
                         except TimeoutError:
                             pass
                     if sys.stdin in rlist:
-                        data = os.read(sys.stdin.fileno(), 1024)
+                        data = os.read(sys.stdin.fileno(), BUFFER_SIZE)
                         if not data:
                             break
                         channel.send(data)
@@ -279,10 +289,12 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
                 return output
 
 def run_cmd(command: str | None = None, capture_output: bool = False, payload: bytes | None = None, client: str = 'paramiko') -> bytes | None:
-    """Run a command on the remote server. If capture_output is True, the stdout bytes are returned."""
+    """Run a command on the remote server. If capture_output is True, the standard out bytes are returned."""
 
     if client == 'local' or 'DOJO_AUTH_TOKEN' in os.environ:
-        return subprocess.run(command or 'bash', shell=True, capture_output=capture_output, input=payload).stdout
+        completed_process = subprocess.run(command or 'bash', shell=True, capture_output=capture_output, input=payload)
+        if capture_output:
+            return completed_process.stdout
     else:
         if not request('/docker').json().get('success'):
             error('No active challenge session; start a challenge!')
