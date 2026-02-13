@@ -15,7 +15,7 @@ from .config import DEFAULT_CONFIG_PATH, load_user_config, show_config
 from .log import info
 from .remote import download_file, print_file, run_cmd, ssh_keygen, upload_file
 from .sensai import init_sensai
-from .shell import init_fish, init_nu, init_zsh
+from .shell import init_bash, init_fish, init_nu, init_zsh
 from .terminal import apply_style
 from .tui import init_tui
 from .user import do_login, do_logout, show_belts, show_me, show_score, show_scoreboard
@@ -194,11 +194,19 @@ def connect():
     run_cmd()
 
 @app.command(rich_help_panel='Remote Connection')
-def fish(
-    command: Annotated[str | None, Option('-c', '--command', help='Run the given commands and then exit.')] = None,
-    init_command: Annotated[str | None, Option('-C', '--init-command', help='Run the given commands and then enter an interactive shell.')] = None
+def bash(
+    command_string: Annotated[str | None, Option('-c', help='Run the given command and then exit.')] = None
 ):
-    """Connect to the current challenge via fish."""
+    """Connect to the current challenge via a bash login shell."""
+
+    init_bash(command_string)
+
+@app.command(rich_help_panel='Remote Connection')
+def fish(
+    command: Annotated[str | None, Option('-c', '--command', help='Run the given command and then exit.')] = None,
+    init_command: Annotated[str | None, Option('-C', '--init-command', help='Run the given command and then enter an interactive shell.')] = None
+):
+    """Connect to the current challenge via a fish login shell."""
 
     init_fish(command, init_command)
 
@@ -207,13 +215,13 @@ def nu(
     commands: Annotated[str | None, Option('-c', '--commands', help='Run the given commands and then exit.')] = None,
     exec_commands: Annotated[str | None, Option('-e', '--execute', help='Run the given commands and then enter an interactive shell.')] = None
 ):
-    """Connect to the current challenge via nushell."""
+    """Connect to the current challenge via a nushell login shell."""
 
     init_nu(commands, exec_commands)
 
 @app.command(rich_help_panel='Remote Connection')
 def tmux():
-    """Connect to the current challenge via tmux."""
+    """Connect to the current challenge via a tmux login shell."""
 
     run_cmd('tmux -l')
 
@@ -225,11 +233,11 @@ def zellij():
 
 @app.command(rich_help_panel='Remote Connection')
 def zsh(
-    commands: Annotated[str | None, Option('-c', help='Run the given commands and then exit.')] = None
+    command: Annotated[str | None, Option('-c', help='Run the given command and then exit.')] = None
 ):
-    """Connect to the current challenge via zsh."""
+    """Connect to the current challenge via a zsh login shell."""
 
-    init_zsh(commands)
+    init_zsh(command)
 
 @app.command('ssh', help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
 @app.command(help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
@@ -258,6 +266,14 @@ def dust(
     """List the largest files in a directory, using [bold cyan]dust[/]. Helpful when clearing up space."""
 
     run_cmd(f'dust -CFprsx -n {count} {path or '~'} 2>/dev/null')
+
+@app.command(rich_help_panel='Remote Transfer')
+def bat(
+    path: Annotated[Path, Argument(help='The file to print')]
+):
+    """Print the contents of a remote file to standard out using [bold cyan]bat[/]."""
+
+    run_cmd(f'bat {path}')
 
 @app.command(rich_help_panel='Remote Transfer')
 def cat(

@@ -5,9 +5,9 @@ Handles challenge initialization and flag submission.
 from bs4 import BeautifulSoup
 from itsdangerous import URLSafeSerializer
 import os
+from pathlib import Path
 import re
 from rich.markdown import Markdown
-from pathlib import Path
 import string
 
 from .http import request
