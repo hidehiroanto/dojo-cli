@@ -298,7 +298,7 @@ def run_cmd(command: str | None = None, capture_output: bool = False, payload: b
         else:
             error(f'Invalid client: {client}')
 
-def download_file(remote_path: Path, local_path: Path | None = None):
+def download_file(remote_path: Path, local_path: Path | None = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
@@ -318,9 +318,10 @@ def download_file(remote_path: Path, local_path: Path | None = None):
     with get_sftp_client() as sftp_client:
         sftp_client.get(str(remote_path), str(local_path))
 
-    success(f'Downloaded {remote_path} to {local_path}')
+    if log_success:
+        success(f'Downloaded {remote_path} to {local_path}')
 
-def upload_file(local_path: Path, remote_path: Path | None = None):
+def upload_file(local_path: Path, remote_path: Path | None = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
@@ -343,4 +344,5 @@ def upload_file(local_path: Path, remote_path: Path | None = None):
     with get_sftp_client() as sftp_client:
         sftp_client.put(str(local_path), str(remote_path))
 
-    success(f'Uploaded {local_path} to {remote_path}')
+    if log_success:
+        success(f'Uploaded {local_path} to {remote_path}')

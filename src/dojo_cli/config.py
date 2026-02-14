@@ -1,5 +1,5 @@
 """
-Handles config. Config can be either JSON or YAML for now, might add TOML later.
+Handles configuration. Configuration file can be either JSON or YAML for now, might add TOML later.
 """
 
 from copy import deepcopy
