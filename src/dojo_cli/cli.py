@@ -25,7 +25,7 @@ app = Typer(
     no_args_is_help=True,
     context_settings={'help_option_names': ['-h', '--help']},
     help=f"""
-    [bold cyan]dojo[/] is a Python command line interface to interact with the website and API at {apply_style(load_user_config()['base_url'])}.
+    [bold cyan]dojo[/] is a Python command line interface to interact with the website and API at [bold underline blue]pwn.college[/].
 
     Type -h or --help after [bold cyan]dojo[/] <COMMAND> to display further documentation for one of the below commands.
 

@@ -4,7 +4,9 @@
 
 ## Images
 
-![dojo-cli](https://github.com/hidehiroanto/dojo-cli/blob/main/images/help.png)
+![dojo](https://github.com/hidehiroanto/dojo-cli/blob/main/images/help-black.png)
+![trogon](https://github.com/hidehiroanto/dojo-cli/blob/main/images/trogon-tokyo-night.png)
+![fastfetch](https://github.com/hidehiroanto/dojo-cli/blob/main/images/nu-fastfetch.png)
 
 ## Quickstart
 
