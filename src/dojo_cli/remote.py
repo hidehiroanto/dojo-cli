@@ -96,7 +96,7 @@ def ssh_rmdir(path: Path | str):
     client.rmdir(str(path))
 
 def ssh_write(path: Path | str, data: bytes) -> int:
-    with get_remote_client().sftp.open(str(path), 'r+') as file:
+    with get_remote_client().sftp.open(str(path), 'w') as file:
         file.write(data)
         return len(data)
 
