@@ -320,16 +320,21 @@ def edit(
     If no path is specified, it defaults to the mount point.
     If no editor is specified, it uses Visual Studio Code, unless otherwise configured.
     Supported editors include:
+        'CodeEdit'
         'Cursor'
         'Emacs'
         'Google Antigravity'
         'Helix'
         'Kakoune'
+        'Lapce'
+        'Micro'
         'Nano'
         'Neovim'
+        'PyCharm'
         'Sublime Text'
         'Vim'
         'Visual Studio Code'
+        'VSCodium'
         'Windsurf'
         'Zed'
     If no mount point is specified, it defaults to the configured mount point.
@@ -354,6 +359,24 @@ def vscode(
     """Mount the current challenge locally and open it in Visual Studio Code."""
 
     init_editor('Visual Studio Code', mount_point, path)
+
+@app.command(rich_help_panel='Remote Editing')
+def codeedit(
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
+):
+    """Mount the current challenge locally and open it in CodeEdit. (MacOS only, very broken)"""
+
+    init_editor('CodeEdit', mount_point, path)
+
+@app.command('codium', rich_help_panel='Remote Editing')
+def vscodium(
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
+):
+    """Mount the current challenge locally and open it in VSCodium."""
+
+    init_editor('VSCodium', mount_point, path)
 
 @app.command(rich_help_panel='Remote Editing')
 def cursor(
@@ -389,6 +412,24 @@ def kakoune(
     init_editor('Kakoune', mount_point, path)
 
 @app.command(rich_help_panel='Remote Editing')
+def lapce(
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
+):
+    """Mount the current challenge locally and open it in Lapce."""
+
+    init_editor('Lapce', mount_point, path)
+
+@app.command(rich_help_panel='Remote Editing')
+def micro(
+    path: Annotated[Path, Argument(help='The file path to open, relative to the mount point.')],
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
+):
+    """Mount the current challenge locally and open a mounted file in Micro."""
+
+    init_editor('Micro', mount_point, path)
+
+@app.command(rich_help_panel='Remote Editing')
 def nano(path: Annotated[Path, Argument(help='The file path to open.')]):
     """Open a remote file in Nano."""
 
@@ -399,6 +440,15 @@ def neovim(path: Annotated[Optional[Path], Argument(help='The path to open.')] =
     """Open a remote directory or file in Neovim."""
 
     edit_path('nvim', path)
+
+@app.command(rich_help_panel='Remote Editing')
+def pycharm(
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
+):
+    """Mount the current challenge locally and open it in PyCharm."""
+
+    init_editor('PyCharm', mount_point, path)
 
 @app.command('subl', rich_help_panel='Remote Editing')
 def sublime(

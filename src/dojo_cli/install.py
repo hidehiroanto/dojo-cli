@@ -6,6 +6,7 @@ from pathlib import Path
 import requests
 from shutil import which
 import subprocess
+from typing import Optional
 
 from .log import error, info, warn
 
@@ -20,7 +21,11 @@ UV_INSTALL_URL = 'https://astral.sh/uv/install.sh'
 ZEROBREW_GITHUB_URL = 'https://github.com/lucasgelfond/zerobrew'
 ZEROBREW_INSTALL_URL = 'https://zerobrew.rs/install'
 
-def homebrew_install(formulae: list[str] = [], casks: list[str] = [], taps: list[str] = []):
+def homebrew_install(
+    formulae: Optional[list[str]] = None,
+    casks: Optional[list[str]] = None,
+    taps: Optional[list[str]] = None
+):
     """Install Homebrew formulae and casks."""
 
     brew = Path(which('brew') or HOMEBREW_BIN_DIR / 'brew')
@@ -38,7 +43,10 @@ def homebrew_install(formulae: list[str] = [], casks: list[str] = [], taps: list
     if formulae:
         subprocess.run([brew, 'install'] + formulae)
 
-def scoop_install(packages: list[str] = [], buckets: list[str] = []):
+def scoop_install(
+    packages: Optional[list[str]] = None,
+    buckets: Optional[list[str]] = None
+):
     # Requires PowerShell
     # Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
     # Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
@@ -58,12 +66,18 @@ def scoop_install(packages: list[str] = [], buckets: list[str] = []):
         # TODO: Update scoop
         pass
 
-    for bucket in buckets:
-        subprocess.run(['scoop', 'bucket', 'add', bucket])
-    for package in packages:
-        subprocess.run(['scoop', 'install', package])
+    if buckets:
+        for bucket in buckets:
+            subprocess.run(['scoop', 'bucket', 'add', bucket])
+    if packages:
+        for package in packages:
+            subprocess.run(['scoop', 'install', package])
 
-def uv_install(global_packages: list[str] = [], local_packages: list[str] = [], tools: list[str] = []):
+def uv_install(
+    global_packages: Optional[list[str]] = None,
+    local_packages: Optional[list[str]] = None,
+    tools: Optional[list[str]] = None
+):
     """
     Install Python packages and tools using uv, an extremely fast Python package manager written in Rust.
     This assumes that uv is installed independently and not with another package manager.
@@ -78,7 +92,7 @@ def uv_install(global_packages: list[str] = [], local_packages: list[str] = [], 
 
     if global_packages:
         subprocess.run([uv, 'pip', 'install', '-U', '--break-system-packages', '--strict', '--system'] + global_packages)
-    elif local_packages:
+    if local_packages:
         subprocess.run([uv, 'add', '-U'] + local_packages)
     if tools:
         for tool in tools:
@@ -87,7 +101,11 @@ def uv_install(global_packages: list[str] = [], local_packages: list[str] = [], 
 # Use at your own risk, wax can't detect installed casks or Homebrew-added taps
 # Installing wax casks may lead to `IO error: Permission denied (os error 13)`
 # Using wax to uninstall and reinstall ruff or ty may lead to `IO error: File exists (os error 17)`
-def wax_install(formulae: list[str] = [], casks: list[str] = [], taps: list[str] = []):
+def wax_install(
+    formulae: Optional[list[str]] = None,
+    casks: Optional[list[str]] = None,
+    taps: Optional[list[str]] = None
+):
     """
     Install formulae and casks using Wax, a fast, modern Homebrew-compatible package manager built in Rust.
 
@@ -115,7 +133,11 @@ def wax_install(formulae: list[str] = [], casks: list[str] = [], taps: list[str]
     if formulae:
         subprocess.run([wax, 'i'] + formulae)
 
-def zerobrew_install(formulae: list[str] = [], casks: list[str] = [], taps: list[str] = []):
+def zerobrew_install(
+    formulae: Optional[list[str]] = None,
+    casks: Optional[list[str]] = None,
+    taps: Optional[list[str]] = None
+):
     """
     Install Homebrew formulae and casks using the Zerobrew package manager.
     Zerobrew is a drop-in, 5-20x faster, experimental Homebrew alternative written in Rust.

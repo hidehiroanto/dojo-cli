@@ -3,6 +3,7 @@ Handles installing, updating, and launching SSHFS and code editors.
 """
 
 # TODO: Add more package managers, Windows support?
+# TODO: Move mount stuff to mount.py?
 
 import mfusepy as fuse
 import os
@@ -23,18 +24,26 @@ USR_LOCAL_BIN_DIR = Path('/usr/local/bin')
 
 # TODO: Add more editors
 SUPPORTED_EDITORS = {
-    'Cursor': {'cli': 'cursor', 'package': 'cursor', 'type': 'cask'},
-    'Google Antigravity': {'cli': 'agy', 'package': 'antigravity', 'type': 'cask'},
-    'Emacs': {'cli': 'emacs', 'package': 'emacs', 'type': 'formula'},
-    'Helix': {'cli': 'hx', 'package': 'helix', 'type': 'formula'},
-    'Kakoune': {'cli': 'kak', 'package': 'kakoune', 'type': 'formula'},
-    'Nano': {'cli': 'nano', 'package': 'nano', 'type': 'formula'},
-    'Neovim': {'cli': 'nvim', 'package': 'neovim', 'type': 'formula'},
-    'Sublime Text': {'cli': 'subl', 'package': 'sublime-text', 'type': 'cask'},
-    'Vim': {'cli': 'vim', 'package': 'vim', 'type': 'formula'},
-    'Visual Studio Code': {'cli': 'code', 'package': 'visual-studio-code', 'type': 'cask'},
-    'Windsurf': {'cli': 'windsurf', 'package': 'windsurf', 'type': 'cask'},
-    'Zed': {'cli': 'zed', 'package': 'zed', 'type': 'cask'}
+    'CodeEdit': {
+        'cli': 'codeedit',
+        'brew': {'formulae': ['codeedit-cli'], 'casks': ['codeedit'], 'taps': ['codeeditapp/formulae']}
+    },
+    'Cursor': {'cli': 'cursor', 'brew': {'casks': ['cursor']}},
+    'Emacs': {'cli': 'emacs', 'brew': {'formulae': ['emacs']}},
+    'Google Antigravity': {'cli': 'agy', 'brew': {'casks': ['antigravity']}},
+    'Helix': {'cli': 'hx', 'brew': {'formulae': ['helix']}},
+    'Kakoune': {'cli': 'kak', 'brew': {'formulae': ['kakoune']}},
+    'Lapce': {'cli': 'lapce', 'brew': {'casks': ['lapce']}},
+    'Micro': {'cli': 'micro', 'brew': {'formulae': ['micro']}},
+    'Nano': {'cli': 'nano', 'brew': {'formulae': ['nano']}},
+    'Neovim': {'cli': 'nvim', 'brew': {'formulae': ['neovim']}},
+    'PyCharm': {'cli': 'pycharm', 'brew': {'casks': ['pycharm']}},
+    'Sublime Text': {'cli': 'subl', 'brew': {'casks': ['sublime-text']}},
+    'Vim': {'cli': 'vim', 'brew': {'formulae': ['vim']}},
+    'Visual Studio Code': {'cli': 'code', 'brew': {'casks': ['visual-studio-code']}},
+    'VSCodium': {'cli': 'codium', 'brew': {'casks': ['vscodium']}},
+    'Windsurf': {'cli': 'windsurf', 'brew': {'casks': ['windsurf']}},
+    'Zed': {'cli': 'zed', 'brew': {'casks': ['zed']}}
 }
 
 def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
@@ -142,44 +151,35 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
     else:
         error(f'Unsupported platform: {sys.platform}')
 
-def install_editor(editor: dict[str, str]):
+def install_editor(editor):
     if which(editor['cli']) or (USR_LOCAL_BIN_DIR / editor['cli']).is_file() or (USR_BIN_DIR / editor['cli']).is_file():
-        info(f'{editor['package']} is already installed.')
+        info(f'{editor['cli']} is already installed.')
         return
 
     package_manager = load_user_config()['package_manager'][sys.platform]
     if package_manager == 'homebrew':
-        if editor['type'] == 'formula':
-            homebrew_install([editor['package']])
-        elif editor['type'] == 'cask':
-            homebrew_install(casks=[editor['package']])
+        homebrew_install(editor['brew'].get('formulae'), editor['brew'].get('casks'), editor['brew'].get('taps'))
     elif package_manager == 'wax':
         # Avoid using, wax cask installation is broken, IO error: Permission denied (os error 13)
-        if editor['type'] == 'formula':
-            wax_install([editor['package']])
-        elif editor['type'] == 'cask':
-            wax_install(casks=[editor['package']])
+        wax_install(editor['brew'].get('formulae'), editor['brew'].get('casks'), editor['brew'].get('taps'))
     elif package_manager == 'zerobrew':
-        if editor['type'] == 'formula':
-            zerobrew_install([editor['package']])
-        elif editor['type'] == 'cask':
-            zerobrew_install(casks=[editor['package']])
+        zerobrew_install(editor['brew'].get('formulae'), editor['brew'].get('casks'), editor['brew'].get('taps'))
     else:
         # TODO: Implement "manual" editor installation
-        error(f'Please install {editor} manually.')
+        error(f'Please install {editor['cli']} manually.')
 
 def run_editor(editor_name: str, mount_point: Optional[Path] = None, path: Optional[Path] = None):
-    editor = SUPPORTED_EDITORS.get(editor_name, {'cli': editor_name})
-    editor_cli = which(editor['cli'])
+    cli = str(SUPPORTED_EDITORS[editor_name]['cli']) if editor_name in SUPPORTED_EDITORS else editor_name
+    which_cli = which(cli)
 
-    if editor_cli:
-        editor_cli = Path(editor_cli)
-    elif (USR_LOCAL_BIN_DIR / editor['cli']).is_file():
-        editor_cli = USR_LOCAL_BIN_DIR / editor['cli']
-    elif (USR_BIN_DIR / editor['cli']).is_file():
-        editor_cli = USR_BIN_DIR / editor['cli']
+    if which_cli:
+        cli_path = Path(which_cli)
+    elif (USR_LOCAL_BIN_DIR / cli).is_file():
+        cli_path = USR_LOCAL_BIN_DIR / cli
+    elif (USR_BIN_DIR / cli).is_file():
+        cli_path = USR_BIN_DIR / cli
     else:
-        error(f'Editor {editor['cli']} not found.')
+        error(f'Editor {cli} not found.')
         return
 
     path_to_open = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
@@ -187,10 +187,10 @@ def run_editor(editor_name: str, mount_point: Optional[Path] = None, path: Optio
     if path:
         path_to_open /= path
 
-    if editor_name in ['Kakoune', 'Nano'] and path_to_open.is_dir():
+    if editor_name in ['Kakoune', 'Micro', 'Nano'] and path_to_open.is_dir():
         error(f'{editor_name} does not support opening directories.')
 
-    subprocess.run([editor_cli, path_to_open])
+    subprocess.run([cli_path, path_to_open])
 
 def init_editor(editor_name: Optional[str] = None, mount_point: Optional[Path] = None, path: Optional[Path] = None):
     if not editor_name:
@@ -207,6 +207,7 @@ def init_editor(editor_name: Optional[str] = None, mount_point: Optional[Path] =
         warn('Otherwise, you may need to enable Full Disk Access so that the editor can access the mounted volume.')
         warn('If so, navigate to System Settings > Privacy & Security > Full Disk Access.')
         warn(f'Then turn on Full Disk Access permissions for {editor_name}.')
-        input('Press Enter to dismiss this message.')
+        warn('Press Enter to dismiss this message.')
+        input()
 
     run_editor(editor_name, mount_point, path)
