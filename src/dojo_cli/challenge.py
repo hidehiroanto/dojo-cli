@@ -9,10 +9,12 @@ from pathlib import Path
 import re
 from rich.markdown import Markdown
 import string
+from typing import Optional
 
+from .client import get_remote_client
 from .http import request
 from .log import error, fail, info, success, warn
-from .remote import run_cmd, ssh_getsize
+from .remote import run_cmd
 from .terminal import apply_style
 from .utils import can_render_image, download_image, get_belt_hex, show_table
 
@@ -27,7 +29,7 @@ def parse_challenge_path(challenge_id: str, challenge_data: dict = {}) -> tuple:
     result = re.findall(r'/?([\-\~\w]+)/([\-\w]+)/([\-\w]+)', challenge_id)
     return result[0] if result else tuple()
 
-def get_challenge_num_id(dojo_id: str | None, module_id: str | None, challenge_id: str | None) -> int:
+def get_challenge_num_id(dojo_id: Optional[str], module_id: Optional[str], challenge_id: Optional[str]) -> int:
     if dojo_id and module_id and challenge_id:
         response = request(f'/{dojo_id}/{module_id}', False, False)
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -40,7 +42,7 @@ def get_challenge_num_id(dojo_id: str | None, module_id: str | None, challenge_i
                     return int(str(input_challenge_id['value']))
     return -1
 
-def get_challenge_info(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None):
+def get_challenge_info(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None):
     account_id = request('/users/me').json().get('id')
     if account_id is None:
         error('Please login first or run this in the dojo.')
@@ -75,7 +77,7 @@ def get_challenge_info(dojo_id: str | None = None, module_id: str | None = None,
 def serialize_flag(account_id: int, challenge_id: int) -> str:
     return URLSafeSerializer('').dumps([account_id, challenge_id])[::-1]
 
-def deserialize_flag(flag: str) -> list[int] | None:
+def deserialize_flag(flag: str) -> Optional[list[int]]:
     return URLSafeSerializer('').loads_unsafe(re.sub('.+?{(.+)}', r'\1', flag)[::-1])[1]
 
 def get_flag_size() -> int:
@@ -88,7 +90,7 @@ def get_flag_size() -> int:
             error('Flag file does not exist.')
 
     elif request('/docker').json().get('success'):
-        flag_size = ssh_getsize(flag_path)
+        flag_size = get_remote_client().getsize(str(flag_path))
         if flag_size == -1:
             error('Flag file does not exist.')
         return flag_size
@@ -98,7 +100,7 @@ def get_flag_size() -> int:
 
     return -1
 
-def show_list(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None, official: bool = False, simple: bool = False):
+def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None, official: bool = False, simple: bool = False):
     if not dojo_id:
         dojos = request('/dojos', auth=False).json().get('dojos')
         if official:
@@ -192,7 +194,7 @@ def show_list(dojo_id: str | None = None, module_id: str | None = None, challeng
 
     show_table(table_data, table_title, table_keys, show_lines=True)
 
-def init_challenge(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None, normal: bool = False, privileged: bool = False):
+def init_challenge(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None, normal: bool = False, privileged: bool = False):
     chal_data = request('/docker').json()
 
     if not challenge_id:
@@ -280,7 +282,7 @@ def stop_challenge():
     else:
         error('No active challenge session; start a challenge!')
 
-def show_hint(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None):
+def show_hint(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None):
     (dojo_id, module_id, challenge_id), (account_id, challenge_num_id) = get_challenge_info(dojo_id, module_id, challenge_id)
 
     fake_flag = serialize_flag(account_id, challenge_num_id)
@@ -306,7 +308,7 @@ def show_hint(dojo_id: str | None = None, module_id: str | None = None, challeng
         info(f'Excluding the final newline, the flag is about {flag_length} characters long.')
         info(f'You would only need to figure out the middle {fake_flag.index('.')} characters of the flag.')
 
-def submit_flag(flag: str | None = None, dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None):
+def submit_flag(flag: Optional[str] = None, dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None):
     (dojo_id, module_id, challenge_id), (account_id, challenge_num_id) = get_challenge_info(dojo_id, module_id, challenge_id)
 
     while not flag:

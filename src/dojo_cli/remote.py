@@ -9,13 +9,13 @@ from pathlib import Path
 import select
 from shutil import which
 import signal
-import stat
 import subprocess
 import sys
 import termios
 import tty
+from typing import Optional
 
-from .client import RemoteClient
+from .client import get_remote_client
 from .config import load_user_config
 from .http import request
 from .log import error, info, success, warn
@@ -24,81 +24,6 @@ from .terminal import apply_style
 BUFFER_SIZE = 1024
 DEFAULT_PTY_SIZE = (80, 24)
 DEFAULT_TERM = 'xterm-256color'
-
-#TODO: move all of this into the RemoteClient class from client.py and use that instead
-remote_client = None
-
-def get_remote_client() -> RemoteClient:
-    global remote_client
-    if not remote_client:
-        remote_client = RemoteClient()
-    return remote_client
-
-def ssh_chmod(path: Path | str, mode: int):
-    get_remote_client().chmod(str(path), mode)
-
-def ssh_getsize(path: Path | str) -> int:
-    try:
-        sftp_client = get_remote_client().sftp
-        stat_result = sftp_client.stat(str(path))
-        if stat.S_ISDIR(stat_result.st_mode):
-            return sum(ssh_getsize(Path(path) / child) for child in sftp_client.listdir(str(path)))
-        elif stat.S_ISREG(stat_result.st_mode):
-            return stat_result.st_size
-        else:
-            return -1
-    except FileNotFoundError:
-        return -1
-
-def ssh_is_dir(path: Path | str) -> bool:
-    try:
-        return stat.S_ISDIR(get_remote_client().sftp.stat(str(path)).st_mode)
-    except FileNotFoundError:
-        return False
-
-def ssh_is_file(path: Path | str) -> bool:
-    try:
-        return stat.S_ISREG(get_remote_client().sftp.stat(str(path)).st_mode)
-    except FileNotFoundError:
-        return False
-
-def ssh_listdir(path: Path | str) -> list[str]:
-    return get_remote_client().sftp.listdir(str(path))
-
-def ssh_mkdir(path: Path | str):
-    """This is identical to running f'mkdir -p {path}' remotely."""
-
-    client = get_remote_client()
-    for parent in Path(path).parents[::-1]:
-        if not ssh_is_dir(parent):
-            client.mkdir(str(parent), 0o755)
-    if not ssh_is_dir(path):
-        client.mkdir(str(path), 0o755)
-
-def ssh_read(path: Path | str) -> bytes:
-    with get_remote_client().sftp.open(str(path)) as file:
-        return file.read()
-
-def ssh_remove(path: Path | str):
-    get_remote_client().unlink(str(path))
-
-def ssh_rmdir(path: Path | str):
-    """This is identical to running f'rm -r {path}' remotely."""
-
-    client = get_remote_client()
-    sftp_client = client.sftp
-    for child in sftp_client.listdir(str(path)):
-        child_path = Path(path) / child
-        if ssh_is_dir(child_path):
-            ssh_rmdir(child_path)
-        else:
-            client.unlink(str(child_path))
-    client.rmdir(str(path))
-
-def ssh_write(path: Path | str, data: bytes) -> int:
-    with get_remote_client().sftp.open(str(path), 'w') as file:
-        file.write(data)
-        return len(data)
 
 def ssh_keygen():
     if 'DOJO_AUTH_TOKEN' in os.environ:
@@ -156,26 +81,28 @@ def ssh_keygen():
         info('Enter the above key into the [bold cyan]Add New SSH Key[/] field, and then click [bold cyan]Add[/].')
 
 def bat_file(path: Path):
-    if ssh_is_dir(path):
+    client = get_remote_client()
+    if client.is_dir(str(path)):
         error(f'{apply_style(path)} is a directory.')
-    elif not ssh_is_file(path):
+    elif not client.is_file(str(path)):
         error(f'{apply_style(path)} is not an existing file.')
 
     run_cmd(f'bat {path}')
 
 def print_file(path: Path):
-    if ssh_is_dir(path):
+    client = get_remote_client()
+    if client.is_dir(str(path)):
         error(f'{apply_style(path)} is a directory.')
-    elif not ssh_is_file(path):
+    elif not client.is_file(str(path)):
         error(f'{apply_style(path)} is not an existing file.')
 
     try:
-        sys.stdout.buffer.write(ssh_read(path))
+        sys.stdout.buffer.write(client.read_bytes(str(path)))
         sys.stdout.buffer.flush()
     except PermissionError:
         error(f'Permission to read {apply_style(path)} denied.')
 
-def run_openssh(command: str | None = None, capture_output: bool = False, payload: bytes | None = None) -> bytes | None:
+def run_openssh(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None) -> Optional[bytes]:
     ssh = Path(which('ssh') or '/usr/bin/ssh')
     if not ssh.is_file():
         error('Please install OpenSSH first.')
@@ -201,8 +128,8 @@ def run_openssh(command: str | None = None, capture_output: bool = False, payloa
 
     subprocess.run(ssh_argv, capture_output=capture_output, input=payload)
 
-def run_paramiko(command: str | None = None, capture_output: bool = False, payload: bytes | None = None) -> bytes | None:
-    with get_remote_client().ssh.get_transport().open_session() as channel:
+def run_paramiko(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None) -> Optional[bytes]:
+    with get_remote_client().get_channel() as channel:
         try:
             channel.get_pty(DEFAULT_TERM, *os.get_terminal_size())
         except OSError:
@@ -268,7 +195,7 @@ def run_paramiko(command: str | None = None, capture_output: bool = False, paylo
         if capture_output:
             return output
 
-def run_cmd(command: str | None = None, capture_output: bool = False, payload: bytes | None = None, client: str = 'paramiko') -> bytes | None:
+def run_cmd(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None, client: str = 'paramiko') -> Optional[bytes]:
     """Run a command on the remote server. If capture_output is True, the standard out bytes are returned."""
 
     if client == 'local' or 'DOJO_AUTH_TOKEN' in os.environ:
@@ -286,13 +213,14 @@ def run_cmd(command: str | None = None, capture_output: bool = False, payload: b
         else:
             error(f'Invalid client: {client}')
 
-def download_file(remote_path: Path, local_path: Path | None = None, log_success: bool = True):
+def download_file(remote_path: Path, local_path: Optional[Path] = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
 
-    if not ssh_is_file(remote_path):
+    client = get_remote_client()
+    if not client.is_file(str(remote_path)):
         error('Remote path is not a file.')
 
     if not local_path:
@@ -303,12 +231,12 @@ def download_file(remote_path: Path, local_path: Path | None = None, log_success
     if local_path.is_dir():
         local_path /= remote_path.name
 
-    get_remote_client().sftp.get(str(remote_path), str(local_path))
+    client.get(str(remote_path), str(local_path))
 
     if log_success:
         success(f'Downloaded {remote_path} to {local_path}')
 
-def upload_file(local_path: Path, remote_path: Path | None = None, log_success: bool = True):
+def upload_file(local_path: Path, remote_path: Optional[Path] = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
@@ -322,13 +250,14 @@ def upload_file(local_path: Path, remote_path: Path | None = None, log_success: 
     if not remote_path:
         remote_path = Path(load_user_config()['ssh']['project_path'])
 
-    if not ssh_is_file(remote_path):
-        if ssh_is_dir(remote_path):
+    client = get_remote_client()
+    if not client.is_file(str(remote_path)):
+        if client.is_dir(str(remote_path)):
             remote_path /= local_path.name
-        elif not ssh_is_dir(remote_path.parent):
-            ssh_mkdir(remote_path.parent)
+        elif not client.is_dir(str(remote_path.parent)):
+            client.makedirs(str(remote_path.parent))
 
-    get_remote_client().sftp.put(str(local_path), str(remote_path))
+    client.put(str(local_path), str(remote_path))
 
     if log_success:
         success(f'Uploaded {local_path} to {remote_path}')

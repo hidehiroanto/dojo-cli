@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 from requests import Session
+from typing import Optional
 
 from .config import load_user_config
 from .log import error
@@ -18,7 +19,7 @@ def delete_cookie():
         error('You are not logged in.')
     cookie_path.unlink()
 
-def load_cookie(cookie_path: Path) -> dict | None:
+def load_cookie(cookie_path: Path) -> Optional[dict]:
     assert cookie_path.is_file()
     try:
         cookie_jar = json.loads(cookie_path.read_text())
@@ -38,7 +39,7 @@ def save_cookie(cookie_jar: dict):
     cookie_path.parent.mkdir(parents=True, exist_ok=True)
     cookie_path.write_text(json.dumps(cookie_jar))
 
-def deserialize_auth_token(auth_token: str) -> list | None:
+def deserialize_auth_token(auth_token: str) -> Optional[list[int | str]]:
     token_prefix = 'sk-workspace-local-'
     if auth_token.startswith(token_prefix):
         token_data = URLSafeTimedSerializer('').loads_unsafe(auth_token[len(token_prefix):])[1]

@@ -21,7 +21,7 @@ from trogon.widgets.parameter_controls import (
 )
 
 from typer.main import get_group
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Optional
 
 # The default checkbox values were blue X for unchecked and green X for checked, not good for colorblind users.
 class CustomCheckbox(Checkbox):
@@ -51,7 +51,7 @@ class CustomParameterControls(ParameterControls):
         label = self._make_command_form_control_label(
             name, argument_type, is_option, schema.required, multiple=multiple
         )
-        first_focus_control: Widget | None = None
+        first_focus_control: Optional[Widget] = None
 
         with ControlGroupsContainer():
             # See https://github.com/Textualize/trogon/pull/123
@@ -114,7 +114,7 @@ class CustomParameterControls(ParameterControls):
     @staticmethod
     def make_checkbox_control(
         default: MultiValueParamData,
-        label: Text | None,
+        label: Optional[Text],
         multiple: bool,
         schema: OptionSchema | ArgumentSchema,
         control_id: str,

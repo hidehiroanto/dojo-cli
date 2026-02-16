@@ -14,12 +14,13 @@ import sys
 import tarfile
 import tempfile
 
+from .client import get_remote_client
 from .config import load_user_config
 from .editor import init_editor
 from .http import request
 from .install import homebrew_install, uv_install, wax_install, zerobrew_install
 from .log import error, info, success, warn
-from .remote import run_cmd, ssh_chmod, ssh_getsize, ssh_listdir, ssh_mkdir, ssh_remove, ssh_rmdir, upload_file
+from .remote import run_cmd, upload_file
 
 HOME_DIR_MAX_SIZE = 1_000_000_000
 LOCAL_BIN_DIR = Path('~/.local/bin').expanduser()
@@ -102,11 +103,12 @@ def check_lang_server_settings(lang_servers: list[str]):
         save_zed_settings(zed_settings, comment_list)
 
 def upload_zed_server():
+    client = get_remote_client()
     echo_query = run_cmd('echo $HOME', True) or b'/home/hacker'
     home_dir = Path(echo_query.strip().decode())
     zed_server_dir = home_dir / '.zed_server'
-    ssh_mkdir(zed_server_dir)
-    zed_old_versions = ssh_listdir(zed_server_dir)
+    client.makedirs(str(zed_server_dir))
+    zed_old_versions = client.listdir(str(zed_server_dir))
 
     if sys.platform in ['darwin', 'linux']:
         zed_cli = Path(which('zed') or LOCAL_BIN_DIR / 'zed')
@@ -138,27 +140,28 @@ def upload_zed_server():
         zed_server_data = gzip.decompress(requests.get(zed_asset['browser_download_url']).content)
 
         # Check if enough disk space is available
-        du_query = run_cmd(f'du -bs {home_dir} 2>/dev/null', True) or b'0' # ssh_getsize(home_dir)
-        if len(zed_server_data) - ssh_getsize(zed_server_dir) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
+        du_query = run_cmd(f'du -bs {home_dir} 2>/dev/null', True) or b'0'
+        if len(zed_server_data) - client.getsize(str(zed_server_dir)) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
             error('Not enough disk space to update zed-remote-server')
 
         for old_version in zed_old_versions:
-            ssh_remove(zed_server_dir / old_version)
+            client.remove(str(zed_server_dir / old_version))
 
         with tempfile.NamedTemporaryFile() as temp_file:
             temp_file.write(zed_server_data)
             temp_file.flush()
             upload_file(Path(temp_file.name), zed_server_dir / zed_server, False)
 
-        ssh_chmod(zed_server_dir / zed_server, 0o755)
+        client.chmod(str(zed_server_dir / zed_server), 0o755)
         success(f'Updated zed-remote-server to version [bold cyan]{zed_semver}[/]')
 
 def upload_lang_server(lang_server: str, arch: str, latest_url: str):
+    client = get_remote_client()
     echo_query = run_cmd('echo $HOME', True) or b'/home/hacker'
     home_dir = Path(echo_query.strip().decode())
     lang_dir = home_dir / '.local' / 'share' / 'zed' / 'languages'
-    ssh_mkdir(lang_dir / lang_server)
-    old_versions = ssh_listdir(lang_dir / lang_server)
+    client.makedirs(str(lang_dir / lang_server))
+    old_versions = client.listdir(str(lang_dir / lang_server))
     latest = requests.get(latest_url).json()
 
     info(f'Installed versions of {lang_server}: {old_versions}')
@@ -176,23 +179,23 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
             lang_server_data = tar_member.read() if tar_member else b''
 
         # Check if enough disk space is available
-        du_query = run_cmd(f'du -bs {home_dir} 2>/dev/null', True) or b'0' # ssh_getsize(home_dir)
-        if len(lang_server_data) - ssh_getsize(lang_dir / lang_server) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
+        du_query = run_cmd(f'du -bs {home_dir} 2>/dev/null', True) or b'0'
+        if len(lang_server_data) - client.getsize(str(lang_dir / lang_server)) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
             error('Not enough disk space to update language server')
 
         for old_version in old_versions:
-            ssh_rmdir(lang_dir / lang_server / old_version)
+            client.remove(str(lang_dir / lang_server / old_version))
 
-        ssh_mkdir(lang_server_dir)
+        client.makedirs(str(lang_server_dir))
         with tempfile.NamedTemporaryFile() as temp_file:
             temp_file.write(lang_server_data)
             temp_file.flush()
             upload_file(Path(temp_file.name), lang_server_dir / lang_server, False)
 
-        ssh_chmod(lang_server_dir / lang_server, 0o755)
+        client.chmod(str(lang_server_dir / lang_server), 0o755)
         success(f'Updated {lang_server} to version [bold cyan]{latest['name']}[/]')
 
-def run_zed_client():
+def run_zed():
     ssh_config = load_user_config()['ssh']
     ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
@@ -261,4 +264,4 @@ def init_zed(install: bool = False, use_lang_servers: bool = False, use_mount: b
         upload_lang_server('ruff', RUFF_ARCH, RUFF_LATEST_URL)
         upload_lang_server('ty', TY_ARCH, TY_LATEST_URL)
 
-    run_zed_client()
+    run_zed()

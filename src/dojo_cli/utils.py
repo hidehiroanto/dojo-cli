@@ -8,7 +8,7 @@ import os
 from rich import box, print as rprint
 from rich.table import Column, Table
 from rich.text import Text
-from typing import Any
+from typing import Any, Optional
 
 from .config import load_user_config
 from .http import request
@@ -17,14 +17,14 @@ from .terminal import apply_style
 if os.getenv('TERM_PROGRAM') not in ['Apple_Terminal']:
     from textual_image.renderable import Image, SixelImage, TGPImage
 
-def get_box(s: str) -> box.Box | None:
+def get_box(s: str) -> Optional[box.Box]:
     if hasattr(box, s) and isinstance(getattr(box, s), box.Box):
         return getattr(box, s)
     lines = s.splitlines()
     if len(lines) == 8 and all(len(line) == 4 for line in lines):
         return box.Box(s)
 
-def show_table(table_data: dict[str, Any] | list[dict[str, Any]], title: str | None = None, keys: list[str] | None = None, **kwargs):
+def show_table(table_data: dict[str, Any] | list[dict[str, Any]], title: Optional[str] = None, keys: Optional[list[str]] = None, **kwargs):
     if isinstance(table_data, dict):
         table_data = [table_data]
     if not keys:
@@ -52,7 +52,7 @@ def can_render_image():
         return True
     return issubclass(Image, (SixelImage, TGPImage))
 
-def download_image(url: str, image_type: str | None = None):
+def download_image(url: str, image_type: Optional[str] = None):
     base_url = load_user_config()['base_url']
     if not (url.startswith('http://') or url.startswith('https://')):
         url = base_url + url

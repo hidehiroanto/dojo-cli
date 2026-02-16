@@ -10,6 +10,7 @@ from pathlib import Path
 from shutil import which
 import subprocess
 import sys
+from typing import Optional
 
 from .client import RemoteClient
 from .config import load_user_config
@@ -34,7 +35,7 @@ SUPPORTED_EDITORS = {
     'Zed': {'cli': 'zed', 'package': 'zed', 'type': 'cask'}
 }
 
-def mount_remote(mount_point: Path | None = None, mode: str = 'sshfs'):
+def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
@@ -165,7 +166,7 @@ def install_editor(editor: dict[str, str]):
         # TODO: Implement "manual" editor installation
         error(f'Please install {editor} manually.')
 
-def run_editor(editor_name: str, mount_point: Path | None = None):
+def run_editor(editor_name: str, mount_point: Optional[Path] = None):
     editor = SUPPORTED_EDITORS.get(editor_name, {'cli': editor_name})
     editor_cli = which(editor['cli'])
 
@@ -182,7 +183,7 @@ def run_editor(editor_name: str, mount_point: Path | None = None):
     mount_point = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
     subprocess.run([editor_cli, mount_point])
 
-def init_editor(editor_name: str | None = None, mount_point: Path | None = None):
+def init_editor(editor_name: Optional[str] = None, mount_point: Optional[Path] = None):
     if not editor_name:
         editor_name = load_user_config()['code_editor']
 

@@ -6,13 +6,14 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from getpass import getpass
 from requests import Session
+from typing import Optional
 
 from .config import load_user_config
 from .http import delete_cookie, request, save_cookie
 from .log import error, fail, info, success
 from .utils import can_render_image, download_image, get_belt_hex, show_table
 
-def do_login(username: str | None = None, password: str | None = None):
+def do_login(username: Optional[str] = None, password: Optional[str] = None):
     while not username:
         username = input('Enter username or email: ')
     while not password:
@@ -62,7 +63,7 @@ def show_me(simple: bool = False):
     keys = ['rank', 'id', 'handle', 'belt', 'email', 'website', 'affiliation', 'country', 'bracket', 'date_ascended', 'score']
     show_table(account, 'Account Info', keys)
 
-def show_score(username: str | None = None):
+def show_score(username: Optional[str] = None):
     if not username:
         me = request('/users/me')
         if me.ok:
@@ -107,7 +108,7 @@ def get_wechall_rankings(page: int = 1, simple: bool = False):
 
     return wechall_data
 
-def show_scoreboard(dojo_id: str | None = None, module_id: str | None = None, duration: str = 'all', page: int = 1, simple: bool = False):
+def show_scoreboard(dojo_id: Optional[str] = None, module_id: Optional[str] = None, duration: str = 'all', page: int = 1, simple: bool = False):
     if dojo_id:
         durations = {'week': 7, 'month': 30, 'all': 0}
         endpoint = f'/scoreboard/{dojo_id}/{module_id or '_'}/{durations.get(duration.lower(), 0)}/{page}'
@@ -142,7 +143,7 @@ def show_scoreboard(dojo_id: str | None = None, module_id: str | None = None, du
     else:
         show_table(get_wechall_rankings(page, simple), 'WeChall rankings')
 
-def show_belts(belt: str | None = None, page: int | None = None, simple: bool = False):
+def show_belts(belt: Optional[str] = None, page: Optional[int] = None, simple: bool = False):
     response = request('/belts', auth=False).json()
 
     render_image = not simple and can_render_image()

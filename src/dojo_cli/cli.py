@@ -8,7 +8,7 @@ This is the main command line interface file.
 
 from pathlib import Path
 from typer import Argument, Option, Typer
-from typing import Annotated
+from typing import Annotated, Optional
 
 from .challenge import (
     init_challenge, init_next, init_previous, restart_challenge,
@@ -40,8 +40,8 @@ app = Typer(
 
 @app.command(rich_help_panel='User Login and Settings')
 def login(
-    username: Annotated[str | None, Option('-u', '--username', help='Username or email')] = None,
-    password: Annotated[str | None, Option('-p', '--password', help='Password')] = None
+    username: Annotated[Optional[str], Option('-u', '--username', help='Username or email')] = None,
+    password: Annotated[Optional[str], Option('-p', '--password', help='Password')] = None
 ):
     """Log into your pwn.college account and save session cookie to the cache."""
 
@@ -76,7 +76,7 @@ def whoami(
 @app.command('rank', help='An alias for [bold cyan]whois[/].', rich_help_panel='User Info')
 @app.command(rich_help_panel='User Info')
 def whois(
-    username: Annotated[str | None, Option('-u', '--username', help='Username to query')] = None,
+    username: Annotated[Optional[str], Option('-u', '--username', help='Username to query')] = None,
 ):
     """Show global ranking for another user. If no username is given, show the current user's ranking."""
 
@@ -84,8 +84,8 @@ def whois(
 
 @app.command(rich_help_panel='User Info')
 def scoreboard(
-    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
+    dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
     duration: Annotated[str, Option('-t', '--duration', help='Scoreboard duration (week, month, all)')] = 'all',
     page: Annotated[int, Option('-p', '--page', help='Scoreboard page')] = 1,
     simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
@@ -96,8 +96,8 @@ def scoreboard(
 
 @app.command(rich_help_panel='User Info')
 def belts(
-    belt: Annotated[str | None, Option('-c', '--color', help='Filter by belt color')] = None,
-    page: Annotated[int | None, Option('-p', '--page', help='Belt list page')] = None,
+    belt: Annotated[Optional[str], Option('-c', '--color', help='Filter by belt color')] = None,
+    page: Annotated[Optional[int], Option('-p', '--page', help='Belt list page')] = None,
     simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
 ):
     """Show all the users who have earned belts above white belt."""
@@ -108,9 +108,9 @@ def belts(
 @app.command(help='An alias for [bold cyan]list[/].', rich_help_panel='Challenge Info')
 @app.command('list', rich_help_panel='Challenge Info')
 def ls(
-    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None,
+    dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None,
     official: Annotated[bool, Option('-o', '--official', help='Filter to official dojos')] = False,
     simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
 ):
@@ -120,9 +120,9 @@ def ls(
 
 # @app.command(rich_help_panel='Challenge Info')
 def tree(
-    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None
+    dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None
 ):
     """Display the children of a dojo or module in a tree. If no dojo is given, display a tree of all dojos."""
 
@@ -131,9 +131,9 @@ def tree(
 
 @app.command(short_help='Start a new challenge.', rich_help_panel='Challenge Launch')
 def start(
-    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None,
+    dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None,
     normal: Annotated[bool, Option('-n', '--normal', help='Start in normal mode')] = False,
     privileged: Annotated[bool, Option('-p', '--practice', '--privileged', help='Start in privileged mode')] = False
 ):
@@ -199,7 +199,7 @@ def connect():
 
 @app.command(rich_help_panel='Remote Connection')
 def bash(
-    command_string: Annotated[str | None, Option('-c', help='Run the given command and then exit.')] = None
+    command_string: Annotated[Optional[str], Option('-c', help='Run the given command and then exit.')] = None
 ):
     """Connect to the current challenge via a bash login shell."""
 
@@ -207,8 +207,8 @@ def bash(
 
 @app.command(rich_help_panel='Remote Connection')
 def fish(
-    command: Annotated[str | None, Option('-c', '--command', help='Run the given command and then exit.')] = None,
-    init_command: Annotated[str | None, Option('-C', '--init-command', help='Run the given command and then enter an interactive shell.')] = None
+    command: Annotated[Optional[str], Option('-c', '--command', help='Run the given command and then exit.')] = None,
+    init_command: Annotated[Optional[str], Option('-C', '--init-command', help='Run the given command and then enter an interactive shell.')] = None
 ):
     """Connect to the current challenge via a fish login shell."""
 
@@ -216,8 +216,8 @@ def fish(
 
 @app.command(rich_help_panel='Remote Connection')
 def nu(
-    commands: Annotated[str | None, Option('-c', '--commands', help='Run the given commands and then exit.')] = None,
-    exec_commands: Annotated[str | None, Option('-e', '--execute', help='Run the given commands and then enter an interactive shell.')] = None
+    commands: Annotated[Optional[str], Option('-c', '--commands', help='Run the given commands and then exit.')] = None,
+    exec_commands: Annotated[Optional[str], Option('-e', '--execute', help='Run the given commands and then enter an interactive shell.')] = None
 ):
     """Connect to the current challenge via a nushell login shell."""
 
@@ -237,7 +237,7 @@ def zellij():
 
 @app.command(rich_help_panel='Remote Connection')
 def zsh(
-    command: Annotated[str | None, Option('-c', help='Run the given command and then exit.')] = None
+    command: Annotated[Optional[str], Option('-c', help='Run the given command and then exit.')] = None
 ):
     """Connect to the current challenge via a zsh login shell."""
 
@@ -247,7 +247,7 @@ def zsh(
 @app.command(help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
 @app.command('exec', rich_help_panel='Remote Execution')
 def run(
-    command: Annotated[str | None, Argument(help='The command to run')] = None
+    command: Annotated[Optional[str], Argument(help='The command to run')] = None
 ):
     """Execute a remote command. If no command is given, start a shell like [bold cyan]connect[/]."""
 
@@ -255,7 +255,7 @@ def run(
 
 @app.command(rich_help_panel='Remote Execution')
 def du(
-    path: Annotated[Path | None, Option('-p', '--path', help='Path to list files from.')] = None,
+    path: Annotated[Optional[Path], Option('-p', '--path', help='Path to list files from.')] = None,
     count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20
 ):
     """List the largest files in a directory, using [bold cyan]du[/]. Helpful when clearing up space."""
@@ -264,7 +264,7 @@ def du(
 
 @app.command(rich_help_panel='Remote Execution')
 def dust(
-    path: Annotated[Path | None, Option('-p', '--path', help='Path to list files from.')] = None,
+    path: Annotated[Optional[Path], Option('-p', '--path', help='Path to list files from.')] = None,
     count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20
 ):
     """List the largest files in a directory, using [bold cyan]dust[/]. Helpful when clearing up space."""
@@ -291,7 +291,7 @@ def cat(
 @app.command(short_help='Download a file from remote to local.', rich_help_panel='Remote Transfer')
 def download(
     remote_path: Annotated[Path, Argument(help='Path of remote file.')],
-    local_path: Annotated[Path | None, Argument(help='Path of local directory or file.')] = None
+    local_path: Annotated[Optional[Path], Argument(help='Path of local directory or file.')] = None
 ):
     """
     Download a file from remote to local.
@@ -304,7 +304,7 @@ def download(
 @app.command(short_help='Upload a file from local to remote.', rich_help_panel='Remote Transfer')
 def upload(
     local_path: Annotated[Path, Argument(help='Path of local file.')],
-    remote_path: Annotated[Path | None, Argument(help='Path of remote directory or file.')] = None,
+    remote_path: Annotated[Optional[Path], Argument(help='Path of remote directory or file.')] = None,
 ):
     """
     Upload a file from local to remote.
@@ -315,7 +315,7 @@ def upload(
 
 @app.command(short_help='Mount the current challenge locally.', rich_help_panel='Remote Editing')
 def mount(
-    mount_point: Annotated[Path | None, Option('-p', '--point', help='Path of the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
 ):
     """
     Mount the configured remote project path locally onto the specified mount point.
@@ -326,8 +326,8 @@ def mount(
 
 @app.command(short_help='Mount the current challenge locally and open it in the specified editor.', rich_help_panel='Remote Editing')
 def edit(
-    editor: Annotated[str | None, Option('-e', '--editor', help='Name of the editor to use.')] = None,
-    mount_point: Annotated[Path | None, Option('-p', '--point', help='Path of the mount point.')] = None,
+    editor: Annotated[Optional[str], Option('-e', '--editor', help='Name of the editor to use.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
 ):
     """
     Mount the configured remote project path locally onto the specified mount point, and open it in the specified editor.
@@ -422,9 +422,9 @@ def discord():
 
 @app.command(short_help="Show a hint for a challenge's flag.", rich_help_panel='Challenge Help')
 def hint(
-    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None
+    dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None
 ):
     """
     Show a hint for a challenge's flag.
@@ -444,10 +444,10 @@ def sensai():
 @app.command('submit', help='An alias for [bold cyan]solve[/].', rich_help_panel='Flag Submission')
 @app.command(short_help='Submit a flag for a challenge.', rich_help_panel='Flag Submission')
 def solve(
-    flag: Annotated[str | None, Option('-f', '--flag', help='Flag to submit.')] = None,
-    dojo_id: Annotated[str | None, Option('-d', '--dojo', help='Dojo ID')] = None,
-    module_id: Annotated[str | None, Option('-m', '--module', help='Module ID')] = None,
-    challenge_id: Annotated[str | None, Option('-c', '--challenge', help='Challenge ID')] = None,
+    flag: Annotated[Optional[str], Option('-f', '--flag', help='Flag to submit.')] = None,
+    dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
+    challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None,
 ):
     """
     Submit a flag for a challenge. Warns if flag is for wrong user or challenge.
