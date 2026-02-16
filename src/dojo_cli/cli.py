@@ -10,10 +10,14 @@ from pathlib import Path
 from typer import Argument, Option, Typer
 from typing import Annotated
 
-from .challenge import init_challenge, init_next, init_previous, restart_challenge, show_hint, show_list, show_status, stop_challenge, submit_flag
-from .config import DEFAULT_CONFIG_PATH, load_user_config, show_config
+from .challenge import (
+    init_challenge, init_next, init_previous, restart_challenge,
+    show_hint, show_list, show_status, stop_challenge, submit_flag
+)
+from .config import DEFAULT_CONFIG_PATH, show_config
+from .editor import init_editor, mount_remote
 from .log import info
-from .remote import download_file, print_file, run_cmd, ssh_keygen, upload_file
+from .remote import bat_file, download_file, print_file, run_cmd, ssh_keygen, upload_file
 from .sensai import init_sensai
 from .shell import init_bash, init_fish, init_nu, init_zsh
 from .terminal import apply_style
@@ -273,7 +277,7 @@ def bat(
 ):
     """Print the contents of a remote file to standard out using [bold cyan]bat[/]."""
 
-    run_cmd(f'bat {path}')
+    bat_file(path)
 
 @app.command(rich_help_panel='Remote Transfer')
 def cat(
@@ -284,7 +288,7 @@ def cat(
     print_file(path)
 
 @app.command('down', help='An alias for [bold cyan]download[/].', rich_help_panel='Remote Transfer')
-@app.command(rich_help_panel='Remote Transfer')
+@app.command(short_help='Download a file from remote to local.', rich_help_panel='Remote Transfer')
 def download(
     remote_path: Annotated[Path, Argument(help='Path of remote file.')],
     local_path: Annotated[Path | None, Argument(help='Path of local directory or file.')] = None
@@ -297,7 +301,7 @@ def download(
     download_file(remote_path, local_path)
 
 @app.command('up', help='An alias for [bold cyan]upload[/].', rich_help_panel='Remote Transfer')
-@app.command(rich_help_panel='Remote Transfer')
+@app.command(short_help='Upload a file from local to remote.', rich_help_panel='Remote Transfer')
 def upload(
     local_path: Annotated[Path, Argument(help='Path of local file.')],
     remote_path: Annotated[Path | None, Argument(help='Path of remote directory or file.')] = None,
@@ -309,20 +313,112 @@ def upload(
 
     upload_file(local_path, remote_path)
 
-@app.command(rich_help_panel='Remote Coding')
+@app.command(short_help='Mount the current challenge locally.', rich_help_panel='Remote Editing')
+def mount(
+    mount_point: Annotated[Path | None, Option('-p', '--path', help='Path of the mount point.')] = None,
+):
+    """
+    Mount the configured remote project path locally onto the specified mount point.
+    If no mount point is specified, it defaults to the configured mount point.
+    """
+
+    mount_remote(mount_point)
+
+@app.command(short_help='Mount the current challenge locally and open it in the specified editor.', rich_help_panel='Remote Editing')
+def edit(
+    editor: Annotated[str | None, Option('-e', '--editor', help='Specify the editor to use.')] = None,
+    mount_point: Annotated[Path | None, Option('-p', '--path', help='Path of the mount point.')] = None,
+):
+    """
+    Mount the configured remote project path locally onto the specified mount point, and open it in the specified editor.
+
+    If no mount point is specified, it defaults to the configured mount point.
+    If no editor is specified, it uses Visual Studio Code, unless otherwise configured.
+    Supported editors include:
+        'Cursor'
+        'Emacs'
+        'Google Antigravity'
+        'Helix'
+        'Nano'
+        'Neovim'
+        'Sublime Text'
+        'Vim'
+        'Visual Studio Code'
+        'Zed'
+    """
+
+    init_editor(editor, mount_point)
+
+@app.command('agy', rich_help_panel='Remote Editing')
+def antigravity():
+    """Mount the current challenge locally and open it in Google Antigravity."""
+
+    init_editor('Google Antigravity')
+
+@app.command('code', rich_help_panel='Remote Editing')
+def vscode():
+    """Mount the current challenge locally and open it in Visual Studio Code."""
+
+    init_editor('Visual Studio Code')
+
+@app.command(rich_help_panel='Remote Editing')
+def cursor():
+    """Mount the current challenge locally and open it in Cursor."""
+
+    init_editor('Cursor')
+
+@app.command(rich_help_panel='Remote Editing')
+def emacs():
+    """Mount the current challenge locally and open it in Emacs."""
+
+    init_editor('Emacs')
+
+@app.command('hx', rich_help_panel='Remote Editing')
+def helix():
+    """Mount the current challenge locally and open it in Helix."""
+
+    init_editor('Helix')
+
+@app.command(rich_help_panel='Remote Editing')
+def nano():
+    """Mount the current challenge locally and open it in Nano."""
+
+    init_editor('Nano')
+
+@app.command('nvim', rich_help_panel='Remote Editing')
+def neovim():
+    """Mount the current challenge locally and open it in Neovim."""
+
+    init_editor('Neovim')
+
+@app.command('subl', rich_help_panel='Remote Editing')
+def sublime():
+    """Mount the current challenge locally and open it in Sublime Text."""
+
+    init_editor('Sublime Text')
+
+@app.command('vi', help='An alias for [bold cyan]vim[/].', rich_help_panel='Remote Editing')
+@app.command('vim', rich_help_panel='Remote Editing')
+def vim():
+    """Mount the current challenge locally and open it in Vim."""
+
+    init_editor('Vim')
+
+@app.command(rich_help_panel='Remote Editing')
 def zed(
     upgrade_zed: Annotated[bool, Option('-u', '--upgrade', help='Upgrade Zed to the latest version.')] = False,
-    use_lang_servers: Annotated[bool, Option('-l', '--lsp', help='Use ruff (linter) and ty (type checker) from astral.sh, upgrade if necessary.')] = False
+    use_lang_servers: Annotated[bool, Option('-l', '--lsp', help='Use ruff (linter) and ty (type checker).')] = False,
+    use_mount: Annotated[bool, Option('-m', '--mount', help='Mount the remote directory locally.')] = False
 ):
     """Open Zed, a minimal code editor written in Rust, and connect remotely to the current challenge."""
 
-    init_zed(upgrade_zed, use_lang_servers)
+    init_zed(upgrade_zed, use_lang_servers, use_mount)
 
 @app.command(rich_help_panel='Challenge Help')
 def discord():
     """Show the link to the pwn.college Discord server."""
 
-    info('Go to [cyan]https://discord.gg/pwncollege[/] or click [cyan link=https://discord.gg/pwncollege]here[/].')
+    info(f'Click {apply_style('https://discord.gg/pwncollege')} to go to the Discord server or copy the link and paste it into your browser.')
 
 @app.command(short_help="Show a hint for a challenge's flag.", rich_help_panel='Challenge Help')
 def hint(

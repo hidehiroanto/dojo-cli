@@ -26,6 +26,7 @@ BUFFER_SIZE = 1024
 DEFAULT_PTY_SIZE = (80, 24)
 DEFAULT_TERM = 'xterm-256color'
 
+#TODO: move all of this into the SFTP class from sftp.py and use that instead
 ssh_client = None
 
 def get_ssh_client() -> SSHClient:
@@ -174,6 +175,14 @@ def ssh_keygen():
         info('Not logged in, could not automatically add the public key to your user settings.')
         info(f'Use a browser to log into {apply_style(user_config['base_url'])} and navigate to {apply_style(ssh_key_url)}.')
         info('Enter the above key into the [bold cyan]Add New SSH Key[/] field, and then click [bold cyan]Add[/].')
+
+def bat_file(path: Path):
+    if ssh_is_dir(path):
+        error(f'{apply_style(path)} is a directory.')
+    elif not ssh_is_file(path):
+        error(f'{apply_style(path)} is not an existing file.')
+
+    run_cmd(f'bat {path}')
 
 def print_file(path: Path):
     if ssh_is_dir(path):

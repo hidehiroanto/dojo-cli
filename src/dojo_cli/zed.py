@@ -15,21 +15,14 @@ import tarfile
 import tempfile
 
 from .config import load_user_config
+from .editor import init_editor
 from .http import request
+from .install import homebrew_install, uv_install, wax_install, zerobrew_install
 from .log import error, info, success, warn
 from .remote import run_cmd, ssh_chmod, ssh_getsize, ssh_listdir, ssh_mkdir, ssh_remove, ssh_rmdir, upload_file
 
 HOME_DIR_MAX_SIZE = 1_000_000_000
 LOCAL_BIN_DIR = Path('~/.local/bin').expanduser()
-
-CARGO_BIN_DIR = Path('~/.cargo/bin').expanduser()
-RUSTUP_INSTALL_URL = 'https://sh.rustup.rs'
-
-HOMEBREW_BIN_DIR = Path('/opt/homebrew/bin')
-HOMEBREW_INSTALL_URL = 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
-ZEROBREW_BIN_DIR = Path('/opt/zerobrew/prefix/bin')
-ZEROBREW_GITHUB_URL = 'https://github.com/lucasgelfond/zerobrew'
-ZEROBREW_INSTALL_URL = 'https://zerobrew.rs/install'
 
 ZED_ARCH = 'zed-remote-server-linux-x86_64'
 ZED_DOCS_URL = 'https://zed.dev/docs/remote-development'
@@ -41,118 +34,41 @@ RUFF_ARCH = 'ruff-x86_64-unknown-linux-gnu'
 RUFF_LATEST_URL = 'https://api.github.com/repos/astral-sh/ruff/releases/latest'
 TY_ARCH = 'ty-x86_64-unknown-linux-gnu'
 TY_LATEST_URL = 'https://api.github.com/repos/astral-sh/ty/releases/latest'
-UV_INSTALL_URL = 'https://astral.sh/uv/install.sh'
 
-def homebrew_install(casks: list[str] = [], formulae: list[str] = []):
-    """Install Homebrew casks and formulae."""
-
-    brew = Path(which('brew') or HOMEBREW_BIN_DIR / 'brew')
-    if not brew.is_file():
-        info('Installing Homebrew...')
-        subprocess.run(['bash', '-c', requests.get(HOMEBREW_INSTALL_URL).text])
-    else:
-        subprocess.run([brew, 'update'])
-
-    if casks:
-        subprocess.run([brew, 'install', '--cask'] + casks)
-    if formulae:
-        subprocess.run([brew, 'install'] + formulae)
-
-def scoop_install():
-    # Requires PowerShell
-    # Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-    # Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
-    # scoop bucket add main
-    # scoop bucket add extras
-    # scoop install extras/zed
-    # scoop install main/ruff
-    # scoop install main/ty
-    pass
-
-# Avoid using for now, wax can't detect installed casks
-# `wax install --cask zed` (if zed is already installed?) may lead to `IO error: Permission denied (os error 13)`
-# Using wax to uninstall and reinstall ruff or ty may lead to `IO error: File exists (os error 17)`
-def wax_install(casks: list[str] = [], formulae: list[str] = []):
-    """Install Homebrew casks and formulae using the experimental Wax package manager written in Rust."""
-
-    cargo = Path(which('cargo') or CARGO_BIN_DIR / 'cargo')
-    if not cargo.is_file():
-        info('Installing Rust...')
-        subprocess.run(requests.get(RUSTUP_INSTALL_URL).text, shell=True)
-
-    wax = Path(which('wax') or CARGO_BIN_DIR / 'wax')
-    if not wax.is_file():
-        info('Installing Wax...')
-        subprocess.run([cargo, 'install', 'waxpkg'])
-    else:
-        subprocess.run([wax, 'update', '-s'])
-
-    if casks:
-        subprocess.run([wax, 'install', '--cask'] + casks)
-    if formulae:
-        subprocess.run([wax, 'install'] + formulae)
-
-def zerobrew_install(casks: list[str] = [], formulae: list[str] = []):
-    """Install Homebrew casks and formulae using the experimental Zerobrew package manager written in Rust."""
-
-    cargo = Path(which('cargo') or CARGO_BIN_DIR / 'cargo')
-    if not cargo.is_file():
-        info('Installing Rust...')
-        subprocess.run(requests.get(RUSTUP_INSTALL_URL).text, shell=True)
-
-    # zerobrew v0.1.1 is broken, cargo install from source instead for now
-    # zb = Path(which('zb') or LOCAL_BIN_DIR / 'zb')
-    zb = Path(which('zb') or CARGO_BIN_DIR / 'zb')
-    if not zb.is_file():
-        info('Installing Zerobrew...')
-        # subprocess.run(requests.get(ZEROBREW_INSTALL_URL).text, shell=True)
-        subprocess.run(['cargo', 'install', '--git', ZEROBREW_GITHUB_URL])
-        # if zb != CARGO_BIN_DIR / 'zb':
-        #     if zb.is_file():
-        #         zb.unlink()
-        #     zb.symlink_to(CARGO_BIN_DIR / 'zb')
-
-    if casks:
-        # Fall back to homebrew for now
-        # TODO: replace this when zerobrew supports casks
-        homebrew_install(casks)
-    if formulae:
-        subprocess.run([zb, 'install'] + formulae)
-
-# TODO: add support for other package managers
-
-def upgrade_zed_client(upgrade_lang_servers: bool = False):
+def install_zed():
     package_manager = load_user_config()['package_manager'][sys.platform]
     if sys.platform in ['darwin', 'linux']:
         # TODO: add support for other package managers
         if package_manager == 'homebrew':
-            homebrew_install(['zed'], ['ruff', 'ty'] if upgrade_lang_servers else [])
-
+            homebrew_install(casks=['zed'])
         elif package_manager == 'wax':
-            wax_install(['zed'], ['ruff', 'ty'] if upgrade_lang_servers else [])
-
+            wax_install(casks=['zed'])
         elif package_manager == 'zerobrew':
-            zerobrew_install(['zed'], ['ruff', 'ty'] if upgrade_lang_servers else [])
-
+            zerobrew_install(casks=['zed'])
         else:
             # This just reinstalls Zed, it's easier than checking GitHub for the latest version
             subprocess.run(requests.get(ZED_INSTALL_URL).text, shell=True)
-
-            if upgrade_lang_servers:
-                uv = Path(which('uv') or LOCAL_BIN_DIR / 'uv')
-                if not uv.is_file():
-                    info('Installing uv...')
-                    subprocess.run(requests.get(UV_INSTALL_URL).text, shell=True)
-                else:
-                    subprocess.run([uv, 'self', 'update'])
-
-                subprocess.run([uv, 'tool', 'install', '-U', 'ruff'])
-                subprocess.run([uv, 'tool', 'install', '-U', 'ty'])
     elif sys.platform == 'win32':
-        # TODO: add Windows support
         error('Windows is not yet supported.')
     else:
-        error('Your operating system is not yet supported.')
+        error('Your OS is not yet supported.')
+
+def install_lang_servers(lang_servers: list[str]):
+    package_manager = load_user_config()['package_manager'][sys.platform]
+    if sys.platform in ['darwin', 'linux']:
+        # TODO: add support for other package managers
+        if package_manager == 'homebrew':
+            homebrew_install(lang_servers)
+        elif package_manager == 'wax':
+            wax_install(lang_servers)
+        elif package_manager == 'zerobrew':
+            zerobrew_install(lang_servers)
+        else:
+            uv_install(tools=lang_servers)
+    elif sys.platform == 'win32':
+        error('Windows is not yet supported.')
+    else:
+        error('Your OS is not yet supported.')
 
 def load_zed_settings() -> tuple[dict, list[str]]:
     if ZED_SETTINGS_PATH.is_file():
@@ -167,7 +83,7 @@ def save_zed_settings(zed_settings: dict, comment_list: list[str]):
     comments = ''.join(comment + '\n' for comment in comment_list)
     ZED_SETTINGS_PATH.write_text(comments + json.dumps(zed_settings, indent=2, sort_keys=True))
 
-def check_lang_server_settings():
+def check_lang_server_settings(lang_servers: list[str]):
     zed_settings, comment_list = load_zed_settings()
 
     # TODO: Switch to deep merge
@@ -178,8 +94,8 @@ def check_lang_server_settings():
     if not isinstance(zed_settings['languages']['Python'].get('language_servers'), list):
         zed_settings['languages']['Python']['language_servers'] = []
 
-    if not all(lang_server in zed_settings['languages']['Python']['language_servers'] for lang_server in ['ruff', 'ty']):
-        for lang_server in ['ruff', 'ty']:
+    if not all(lang_server in zed_settings['languages']['Python']['language_servers'] for lang_server in lang_servers):
+        for lang_server in lang_servers:
             if lang_server not in zed_settings['languages']['Python']['language_servers']:
                 zed_settings['languages']['Python']['language_servers'].append(lang_server)
 
@@ -316,14 +232,22 @@ def run_zed_client():
 
     subprocess.run(zed_argv)
 
-def init_zed(upgrade_zed: bool = False, use_lang_servers: bool = False):
+def init_zed(upgrade_zed: bool = False, use_lang_servers: bool = False, use_mount: bool = False):
+    if use_mount:
+        init_editor('Zed')
+        return
+
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
         error('Challenge is not running, start a challenge first.')
 
+    lang_servers = ['ruff', 'ty']
+
     if upgrade_zed:
-        upgrade_zed_client(use_lang_servers)
+        install_zed()
+        if use_lang_servers:
+            install_lang_servers(lang_servers)
 
     if sys.platform in ['darwin', 'linux']:
         upload_zed_server()
@@ -333,7 +257,7 @@ def init_zed(upgrade_zed: bool = False, use_lang_servers: bool = False):
         warn(f'Your OS is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
 
     if use_lang_servers:
-        check_lang_server_settings()
+        check_lang_server_settings(lang_servers)
         upload_lang_server('ruff', RUFF_ARCH, RUFF_LATEST_URL)
         upload_lang_server('ty', TY_ARCH, TY_LATEST_URL)
 

@@ -22,6 +22,7 @@ DEFAULT_CONFIG = {
         'purple': '#7b2f8e',
         'black': '#111111'
     },
+    'code_editor': 'visual-studio-code',
     'cookie_path': '~/.cache/dojo-cli/cookie.json',
     'echo_char': '*',
     'log_styles': {
@@ -60,6 +61,7 @@ DEFAULT_CONFIG = {
         'ServerAliveInterval': 20,
         'ServerAliveCountMax': 3,
         'config_file': '~/.ssh/config',
+        'mount_point': '~/.local/share/dojo-cli/mnt',
         'project_path': '/home/hacker'
     },
     'table': {
