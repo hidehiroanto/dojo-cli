@@ -232,7 +232,7 @@ def run_zed_client():
 
     subprocess.run(zed_argv)
 
-def init_zed(upgrade_zed: bool = False, use_lang_servers: bool = False, use_mount: bool = False):
+def init_zed(install: bool = False, use_lang_servers: bool = False, use_mount: bool = False):
     if use_mount:
         init_editor('Zed')
         return
@@ -244,7 +244,7 @@ def init_zed(upgrade_zed: bool = False, use_lang_servers: bool = False, use_moun
 
     lang_servers = ['ruff', 'ty']
 
-    if upgrade_zed:
+    if install:
         install_zed()
         if use_lang_servers:
             install_lang_servers(lang_servers)

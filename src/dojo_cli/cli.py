@@ -315,7 +315,7 @@ def upload(
 
 @app.command(short_help='Mount the current challenge locally.', rich_help_panel='Remote Editing')
 def mount(
-    mount_point: Annotated[Path | None, Option('-p', '--path', help='Path of the mount point.')] = None,
+    mount_point: Annotated[Path | None, Option('-p', '--point', help='Path of the mount point.')] = None,
 ):
     """
     Mount the configured remote project path locally onto the specified mount point.
@@ -326,13 +326,12 @@ def mount(
 
 @app.command(short_help='Mount the current challenge locally and open it in the specified editor.', rich_help_panel='Remote Editing')
 def edit(
-    editor: Annotated[str | None, Option('-e', '--editor', help='Specify the editor to use.')] = None,
-    mount_point: Annotated[Path | None, Option('-p', '--path', help='Path of the mount point.')] = None,
+    editor: Annotated[str | None, Option('-e', '--editor', help='Name of the editor to use.')] = None,
+    mount_point: Annotated[Path | None, Option('-p', '--point', help='Path of the mount point.')] = None,
 ):
     """
     Mount the configured remote project path locally onto the specified mount point, and open it in the specified editor.
 
-    If no mount point is specified, it defaults to the configured mount point.
     If no editor is specified, it uses Visual Studio Code, unless otherwise configured.
     Supported editors include:
         'Cursor'
@@ -345,6 +344,7 @@ def edit(
         'Vim'
         'Visual Studio Code'
         'Zed'
+    If no mount point is specified, it defaults to the configured mount point.
     """
 
     init_editor(editor, mount_point)
@@ -406,13 +406,13 @@ def vim():
 
 @app.command(rich_help_panel='Remote Editing')
 def zed(
-    upgrade_zed: Annotated[bool, Option('-u', '--upgrade', help='Upgrade Zed to the latest version.')] = False,
-    use_lang_servers: Annotated[bool, Option('-l', '--lsp', help='Use ruff (linter) and ty (type checker).')] = False,
+    install: Annotated[bool, Option('-i', '--install', help='Install Zed or upgrade Zed to the latest version.')] = False,
+    use_lang_servers: Annotated[bool, Option('-l', '--lang-server', help='Use ruff (linter) and ty (type checker).')] = False,
     use_mount: Annotated[bool, Option('-m', '--mount', help='Mount the remote directory locally.')] = False
 ):
     """Open Zed, a minimal code editor written in Rust, and connect remotely to the current challenge."""
 
-    init_zed(upgrade_zed, use_lang_servers, use_mount)
+    init_zed(install, use_lang_servers, use_mount)
 
 @app.command(rich_help_panel='Challenge Help')
 def discord():
