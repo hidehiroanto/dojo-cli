@@ -310,13 +310,14 @@ def mount(mount_point: Annotated[Optional[Path], Option('-p', '--point', help='P
 
 @app.command(short_help='Mount the current challenge locally and open it in the specified editor.', rich_help_panel='Remote Editing')
 def edit(
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
     editor: Annotated[Optional[str], Option('-e', '--editor', help='Name of the editor to use.')] = None,
-    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
-    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
 ):
     """
     Mount the current challenge locally onto the given mount point, and open the given path in the given editor.
 
+    If no path is specified, it defaults to the mount point.
     If no editor is specified, it uses Visual Studio Code, unless otherwise configured.
     Supported editors include:
         'Cursor'
@@ -332,15 +333,14 @@ def edit(
         'Windsurf'
         'Zed'
     If no mount point is specified, it defaults to the configured mount point.
-    If no path is specified, it defaults to the mount point.
     """
 
     init_editor(editor, mount_point, path)
 
 @app.command('agy', rich_help_panel='Remote Editing')
 def antigravity(
-    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
-    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
 ):
     """Mount the current challenge locally and open it in Google Antigravity."""
 
@@ -348,8 +348,8 @@ def antigravity(
 
 @app.command('code', rich_help_panel='Remote Editing')
 def vscode(
-    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
-    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
 ):
     """Mount the current challenge locally and open it in Visual Studio Code."""
 
@@ -357,8 +357,8 @@ def vscode(
 
 @app.command(rich_help_panel='Remote Editing')
 def cursor(
-    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
-    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
 ):
     """Mount the current challenge locally and open it in Cursor."""
 
@@ -372,22 +372,24 @@ def emacs(path: Annotated[Optional[Path], Argument(help='The path to open.')] = 
 
 @app.command('hx', rich_help_panel='Remote Editing')
 def helix(
-    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
-    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None):
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
+):
     """Mount the current challenge locally and open it in Helix."""
 
     init_editor('Helix', mount_point, path)
 
 @app.command('kak', rich_help_panel='Remote Editing')
 def kakoune(
-    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
-    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None):
-    """Mount the current challenge locally and open it in Kakoune."""
+    path: Annotated[Path, Argument(help='The file path to open, relative to the mount point.')],
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
+):
+    """Mount the current challenge locally and open a mounted file in Kakoune."""
 
     init_editor('Kakoune', mount_point, path)
 
 @app.command(rich_help_panel='Remote Editing')
-def nano(path: Annotated[Path, Argument(help='The file to open.')]):
+def nano(path: Annotated[Path, Argument(help='The file path to open.')]):
     """Open a remote file in Nano."""
 
     edit_path('nano', path)
@@ -400,8 +402,8 @@ def neovim(path: Annotated[Optional[Path], Argument(help='The path to open.')] =
 
 @app.command('subl', rich_help_panel='Remote Editing')
 def sublime(
-    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
-    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
 ):
     """Mount the current challenge locally and open it in Sublime Text."""
 
@@ -409,10 +411,10 @@ def sublime(
 
 @app.command('surf', rich_help_panel='Remote Editing')
 def windsurf(
-    path: Annotated[Path, Argument(help='The file path to open, relative to the mount point.')],
-    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
 ):
-    """Mount the current challenge locally and open a file in Windsurf."""
+    """Mount the current challenge locally and open it in Windsurf."""
 
     init_editor('Windsurf', mount_point, path)
 
