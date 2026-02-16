@@ -22,7 +22,7 @@ DEFAULT_CONFIG = {
         'purple': '#7b2f8e',
         'black': '#111111'
     },
-    'code_editor': 'visual-studio-code',
+    'code_editor': 'Visual Studio Code',
     'cookie_path': '~/.cache/dojo-cli/cookie.json',
     'echo_char': '*',
     'log_styles': {
@@ -78,9 +78,7 @@ DEFAULT_CONFIG_PATH = Path('~/.config/dojo-cli/config')
 user_config = {}
 
 def load_config(config_path: Path):
-    config_path = config_path.expanduser()
-    if not config_path.is_absolute():
-        config_path = Path.cwd() / config_path
+    config_path = config_path.expanduser().resolve()
     if config_path.is_dir():
         config_path /= 'config'
     if not config_path.is_file():

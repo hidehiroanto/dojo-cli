@@ -13,7 +13,7 @@ from .config import load_user_config
 from .log import error
 
 def delete_cookie():
-    cookie_path = Path(load_user_config()['cookie_path']).expanduser()
+    cookie_path = Path(load_user_config()['cookie_path']).expanduser().resolve()
     if not cookie_path.is_file():
         error('You are not logged in.')
     cookie_path.unlink()
@@ -34,7 +34,7 @@ def load_cookie(cookie_path: Path) -> dict | None:
         error('Cookie JSON is not a dictionary.')
 
 def save_cookie(cookie_jar: dict):
-    cookie_path = Path(load_user_config()['cookie_path']).expanduser()
+    cookie_path = Path(load_user_config()['cookie_path']).expanduser().resolve()
     cookie_path.parent.mkdir(parents=True, exist_ok=True)
     cookie_path.write_text(json.dumps(cookie_jar))
 
@@ -59,7 +59,7 @@ def request(url: str, api: bool = True, auth: bool = True, csrf: bool = False, *
 
     if auth:
         dojo_auth_token = os.getenv('DOJO_AUTH_TOKEN', '')
-        cookie_path = Path(user_config['cookie_path']).expanduser()
+        cookie_path = Path(user_config['cookie_path']).expanduser().resolve()
         if deserialize_auth_token(dojo_auth_token):
             headers['Authorization'] = f'Bearer {dojo_auth_token}'
         elif cookie_path.is_file():

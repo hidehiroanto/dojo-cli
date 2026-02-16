@@ -11,11 +11,11 @@ from shutil import which
 import subprocess
 import sys
 
+from .client import RemoteClient
 from .config import load_user_config
 from .http import request
 from .install import homebrew_install, wax_install, zerobrew_install
 from .log import error, info, warn
-from .sftp import SFTP
 
 USR_BIN_DIR = Path('/usr/bin')
 USR_LOCAL_BIN_DIR = Path('/usr/local/bin')
@@ -45,10 +45,10 @@ def mount_remote(mount_point: Path | None = None, mode: str = 'sshfs'):
 
     ssh_config = user_config['ssh']
     project_path = Path(ssh_config['project_path'])
-    ssh_config_file = Path(ssh_config['config_file']).expanduser()
-    ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser()
+    ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
+    ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
 
-    mount_point = Path(mount_point or ssh_config['mount_point']).expanduser()
+    mount_point = Path(mount_point or ssh_config['mount_point']).expanduser().resolve()
     mount_point.mkdir(parents=True, exist_ok=True)
     if list(mount_point.iterdir()):
         info('Mount point is non-empty, assuming project path is already mounted')
@@ -77,9 +77,8 @@ def mount_remote(mount_point: Path | None = None, mode: str = 'sshfs'):
             error('Your OS is not yet supported.')
 
         # TODO: Figure out how to background this
-        sftp = SFTP(ssh_config['HostName'], ssh_config['Port'], ssh_config['User'], str(ssh_identity_file))
         info('Keep this process open, press Ctrl+C to unmount the filesystem')
-        fuse.FUSE(sftp, str(mount_point), foreground=True, nothreads=True)
+        fuse.FUSE(RemoteClient(), str(mount_point), foreground=True, nothreads=True)
         info('Unmounting the filesystem...')
 
     elif mode == 'sshfs':
@@ -180,7 +179,7 @@ def run_editor(editor_name: str, mount_point: Path | None = None):
         error(f'Editor {editor['cli']} not found.')
         return
 
-    mount_point = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser()
+    mount_point = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
     subprocess.run([editor_cli, mount_point])
 
 def init_editor(editor_name: str | None = None, mount_point: Path | None = None):

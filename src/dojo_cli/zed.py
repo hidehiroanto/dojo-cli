@@ -194,8 +194,8 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
 
 def run_zed_client():
     ssh_config = load_user_config()['ssh']
-    ssh_config_file = Path(ssh_config['config_file']).expanduser()
-    ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser()
+    ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
+    ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
 
     zed = Path(which('zed') or LOCAL_BIN_DIR / 'zed')
     if not zed.is_file():

@@ -5,8 +5,6 @@ Handles remote SSH connections.
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
 import os
-from paramiko.client import AutoAddPolicy, SSHClient
-from paramiko.sftp_client import SFTPClient
 from pathlib import Path
 import select
 from shutil import which
@@ -17,6 +15,7 @@ import sys
 import termios
 import tty
 
+from .client import RemoteClient
 from .config import load_user_config
 from .http import request
 from .log import error, info, success, warn
@@ -26,100 +25,80 @@ BUFFER_SIZE = 1024
 DEFAULT_PTY_SIZE = (80, 24)
 DEFAULT_TERM = 'xterm-256color'
 
-#TODO: move all of this into the SFTP class from sftp.py and use that instead
-ssh_client = None
+#TODO: move all of this into the RemoteClient class from client.py and use that instead
+remote_client = None
 
-def get_ssh_client() -> SSHClient:
-    ssh_config = load_user_config()['ssh']
-
-    global ssh_client
-    if not ssh_client:
-        ssh_client = SSHClient()
-        ssh_client.load_system_host_keys()
-        ssh_client.set_missing_host_key_policy(AutoAddPolicy())
-        ssh_client.connect(
-            ssh_config['HostName'],
-            ssh_config['Port'],
-            ssh_config['User'],
-            key_filename=str(Path(ssh_config['IdentityFile']).expanduser())
-        )
-    return ssh_client
-
-def get_sftp_client() -> SFTPClient:
-    sftp_client = get_ssh_client().open_sftp()
-    sftp_client.chdir(load_user_config()['ssh']['project_path'])
-    return sftp_client
+def get_remote_client() -> RemoteClient:
+    global remote_client
+    if not remote_client:
+        remote_client = RemoteClient()
+    return remote_client
 
 def ssh_chmod(path: Path | str, mode: int):
-    with get_sftp_client() as sftp_client:
-        sftp_client.chmod(str(path), mode)
+    get_remote_client().chmod(str(path), mode)
 
 def ssh_getsize(path: Path | str) -> int:
-    with get_sftp_client() as sftp_client:
-        try:
-            stat_result = sftp_client.stat(str(path))
-            if stat.S_ISDIR(stat_result.st_mode):
-                return sum(ssh_getsize(Path(path) / child) for child in sftp_client.listdir(str(path)))
-            elif stat.S_ISREG(stat_result.st_mode):
-                return stat_result.st_size
-            else:
-                return -1
-        except FileNotFoundError:
+    try:
+        sftp_client = get_remote_client().sftp
+        stat_result = sftp_client.stat(str(path))
+        if stat.S_ISDIR(stat_result.st_mode):
+            return sum(ssh_getsize(Path(path) / child) for child in sftp_client.listdir(str(path)))
+        elif stat.S_ISREG(stat_result.st_mode):
+            return stat_result.st_size
+        else:
             return -1
+    except FileNotFoundError:
+        return -1
 
 def ssh_is_dir(path: Path | str) -> bool:
-    with get_sftp_client() as sftp_client:
-        try:
-            return stat.S_ISDIR(sftp_client.stat(str(path)).st_mode)
-        except FileNotFoundError:
-            return False
+    try:
+        return stat.S_ISDIR(get_remote_client().sftp.stat(str(path)).st_mode)
+    except FileNotFoundError:
+        return False
 
 def ssh_is_file(path: Path | str) -> bool:
-    with get_sftp_client() as sftp_client:
-        try:
-            return stat.S_ISREG(sftp_client.stat(str(path)).st_mode)
-        except FileNotFoundError:
-            return False
+    try:
+        return stat.S_ISREG(get_remote_client().sftp.stat(str(path)).st_mode)
+    except FileNotFoundError:
+        return False
 
 def ssh_listdir(path: Path | str) -> list[str]:
-    with get_sftp_client() as sftp_client:
-        return sftp_client.listdir(str(path))
+    return get_remote_client().sftp.listdir(str(path))
 
 def ssh_mkdir(path: Path | str):
     """This is identical to running f'mkdir -p {path}' remotely."""
 
-    with get_sftp_client() as sftp_client:
-        for parent in Path(path).parents[::-1]:
-            if not ssh_is_dir(parent):
-                sftp_client.mkdir(str(parent), 0o755)
-        if not ssh_is_dir(path):
-            sftp_client.mkdir(str(path), 0o755)
+    client = get_remote_client()
+    for parent in Path(path).parents[::-1]:
+        if not ssh_is_dir(parent):
+            client.mkdir(str(parent), 0o755)
+    if not ssh_is_dir(path):
+        client.mkdir(str(path), 0o755)
 
 def ssh_read(path: Path | str) -> bytes:
-    with get_sftp_client() as sftp_client:
-        with sftp_client.open(str(path), 'rb') as file:
-            return file.read()
+    with get_remote_client().sftp.open(str(path)) as file:
+        return file.read()
 
 def ssh_remove(path: Path | str):
-    with get_sftp_client() as sftp_client:
-        sftp_client.remove(str(path))
+    get_remote_client().unlink(str(path))
 
 def ssh_rmdir(path: Path | str):
     """This is identical to running f'rm -r {path}' remotely."""
 
-    with get_sftp_client() as sftp_client:
-        for child in sftp_client.listdir(str(path)):
-            child_path = Path(path) / child
-            if ssh_is_dir(child_path):
-                ssh_rmdir(child_path)
-            else:
-                sftp_client.remove(str(child_path))
-        sftp_client.rmdir(str(path))
+    client = get_remote_client()
+    sftp_client = client.sftp
+    for child in sftp_client.listdir(str(path)):
+        child_path = Path(path) / child
+        if ssh_is_dir(child_path):
+            ssh_rmdir(child_path)
+        else:
+            client.unlink(str(child_path))
+    client.rmdir(str(path))
 
-def ssh_write(path: Path | str, data: bytes):
-    with get_sftp_client() as sftp_client:
-        with sftp_client.open(str(path), 'wb') as file:
-            file.write(data)
+def ssh_write(path: Path | str, data: bytes) -> int:
+    with get_remote_client().sftp.open(str(path), 'r+') as file:
+        file.write(data)
+        return len(data)
 
 def ssh_keygen():
     if 'DOJO_AUTH_TOKEN' in os.environ:
@@ -127,8 +106,8 @@ def ssh_keygen():
 
     user_config = load_user_config()
     ssh_config = user_config['ssh']
-    ssh_config_file = Path(ssh_config['config_file']).expanduser()
-    ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser()
+    ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
+    ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
     ssh_public_identity_file = ssh_identity_file.parent.joinpath(f'{ssh_identity_file.name}.pub')
 
     if ssh_identity_file.is_file():
@@ -162,7 +141,7 @@ def ssh_keygen():
         ssh_config_file.write_text(ssh_config_data)
         info(f'Updated SSH configuration at {apply_style(ssh_config_file)}.')
 
-    if Path(user_config['cookie_path']).expanduser().is_file():
+    if Path(user_config['cookie_path']).expanduser().resolve().is_file():
         response = request('/ssh_key', json={'ssh_key': public_key}).json()
         if response['success']:
             success('Successfully added public key to user settings.')
@@ -202,8 +181,8 @@ def run_openssh(command: str | None = None, capture_output: bool = False, payloa
         error('Please install OpenSSH first.')
 
     ssh_config = load_user_config()['ssh']
-    ssh_config_file = Path(ssh_config['config_file']).expanduser()
-    ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser()
+    ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
+    ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
 
     if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
         ssh_argv = [ssh, '-F', ssh_config_file, '-t', ssh_config['Host']]
@@ -223,7 +202,7 @@ def run_openssh(command: str | None = None, capture_output: bool = False, payloa
     subprocess.run(ssh_argv, capture_output=capture_output, input=payload)
 
 def run_paramiko(command: str | None = None, capture_output: bool = False, payload: bytes | None = None) -> bytes | None:
-    with get_ssh_client().get_transport().open_session() as channel:
+    with get_remote_client().ssh.get_transport().open_session() as channel:
         try:
             channel.get_pty(DEFAULT_TERM, *os.get_terminal_size())
         except OSError:
@@ -319,13 +298,12 @@ def download_file(remote_path: Path, local_path: Path | None = None, log_success
     if not local_path:
         local_path = Path.cwd()
 
-    local_path = local_path.expanduser()
+    local_path = local_path.expanduser().resolve()
 
     if local_path.is_dir():
         local_path /= remote_path.name
 
-    with get_sftp_client() as sftp_client:
-        sftp_client.get(str(remote_path), str(local_path))
+    get_remote_client().sftp.get(str(remote_path), str(local_path))
 
     if log_success:
         success(f'Downloaded {remote_path} to {local_path}')
@@ -336,7 +314,7 @@ def upload_file(local_path: Path, remote_path: Path | None = None, log_success: 
     if not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
 
-    local_path = local_path.expanduser()
+    local_path = local_path.expanduser().resolve()
 
     if not local_path.is_file():
         error('Provided path is not a file.')
@@ -350,8 +328,7 @@ def upload_file(local_path: Path, remote_path: Path | None = None, log_success: 
         elif not ssh_is_dir(remote_path.parent):
             ssh_mkdir(remote_path.parent)
 
-    with get_sftp_client() as sftp_client:
-        sftp_client.put(str(local_path), str(remote_path))
+    get_remote_client().sftp.put(str(local_path), str(remote_path))
 
     if log_success:
         success(f'Uploaded {local_path} to {remote_path}')
