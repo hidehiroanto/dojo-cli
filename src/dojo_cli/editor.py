@@ -27,11 +27,13 @@ SUPPORTED_EDITORS = {
     'Google Antigravity': {'cli': 'agy', 'package': 'antigravity', 'type': 'cask'},
     'Emacs': {'cli': 'emacs', 'package': 'emacs', 'type': 'formula'},
     'Helix': {'cli': 'hx', 'package': 'helix', 'type': 'formula'},
+    'Kakoune': {'cli': 'kak', 'package': 'kakoune', 'type': 'formula'},
     'Nano': {'cli': 'nano', 'package': 'nano', 'type': 'formula'},
     'Neovim': {'cli': 'nvim', 'package': 'neovim', 'type': 'formula'},
     'Sublime Text': {'cli': 'subl', 'package': 'sublime-text', 'type': 'cask'},
     'Vim': {'cli': 'vim', 'package': 'vim', 'type': 'formula'},
     'Visual Studio Code': {'cli': 'code', 'package': 'visual-studio-code', 'type': 'cask'},
+    'Windsurf': {'cli': 'windsurf', 'package': 'windsurf', 'type': 'cask'},
     'Zed': {'cli': 'zed', 'package': 'zed', 'type': 'cask'}
 }
 
@@ -50,7 +52,7 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
 
     mount_point = Path(mount_point or ssh_config['mount_point']).expanduser().resolve()
-    mount_point.mkdir(parents=True, exist_ok=True)
+    mount_point.mkdir(0o755, True, True)
     if list(mount_point.iterdir()):
         info('Mount point is non-empty, assuming project path is already mounted')
         return
@@ -166,7 +168,7 @@ def install_editor(editor: dict[str, str]):
         # TODO: Implement "manual" editor installation
         error(f'Please install {editor} manually.')
 
-def run_editor(editor_name: str, mount_point: Optional[Path] = None):
+def run_editor(editor_name: str, mount_point: Optional[Path] = None, path: Optional[Path] = None):
     editor = SUPPORTED_EDITORS.get(editor_name, {'cli': editor_name})
     editor_cli = which(editor['cli'])
 
@@ -180,10 +182,17 @@ def run_editor(editor_name: str, mount_point: Optional[Path] = None):
         error(f'Editor {editor['cli']} not found.')
         return
 
-    mount_point = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
-    subprocess.run([editor_cli, mount_point])
+    path_to_open = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
 
-def init_editor(editor_name: Optional[str] = None, mount_point: Optional[Path] = None):
+    if path:
+        path_to_open /= path
+
+    if editor_name in ['Kakoune', 'Nano'] and path_to_open.is_dir():
+        error(f'{editor_name} does not support opening directories.')
+
+    subprocess.run([editor_cli, path_to_open])
+
+def init_editor(editor_name: Optional[str] = None, mount_point: Optional[Path] = None, path: Optional[Path] = None):
     if not editor_name:
         editor_name = load_user_config()['code_editor']
 
@@ -193,9 +202,11 @@ def init_editor(editor_name: Optional[str] = None, mount_point: Optional[Path] =
         install_editor(SUPPORTED_EDITORS[editor_name])
 
     if sys.platform == 'darwin':
-        info('You may need to enable Full Disk Access so that the editor can access the mounted volume.')
-        info('Navigate to System Settings > Privacy & Security > Full Disk Access.')
-        info(f'Then turn on Full Disk Access permissions for {editor_name}.')
-        input('Press Enter to continue once you are done:')
+        warn(f'You may see a popup like: [bold yellow]{editor_name}.app would like to access files on a network volume.[/]')
+        warn('If so, please click [bold green]Allow[/].')
+        warn('Otherwise, you may need to enable Full Disk Access so that the editor can access the mounted volume.')
+        warn('If so, navigate to System Settings > Privacy & Security > Full Disk Access.')
+        warn(f'Then turn on Full Disk Access permissions for {editor_name}.')
+        input('Press Enter to dismiss this message.')
 
-    run_editor(editor_name, mount_point)
+    run_editor(editor_name, mount_point, path)

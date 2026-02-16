@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption,
 import os
 from pathlib import Path
 import select
+import shlex
 from shutil import which
 import signal
 import subprocess
@@ -87,7 +88,7 @@ def bat_file(path: Path):
     elif not client.is_file(str(path)):
         error(f'{apply_style(path)} is not an existing file.')
 
-    run_cmd(f'bat {path}')
+    run_cmd(shlex.join(['bat', str(path)]))
 
 def print_file(path: Path):
     client = get_remote_client()
@@ -101,6 +102,14 @@ def print_file(path: Path):
         sys.stdout.buffer.flush()
     except PermissionError:
         error(f'Permission to read {apply_style(path)} denied.')
+
+def edit_path(editor: str, path: Optional[Path] = None):
+    client = get_remote_client()
+    if not path:
+        path = Path(load_user_config()['ssh']['project_path'])
+    if editor == 'nano' and client.is_dir(str(path)):
+        error('Nano does not support opening directories.')
+    run_cmd(shlex.join([editor, str(path)]) if path else editor)
 
 def run_openssh(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None) -> Optional[bytes]:
     ssh = Path(which('ssh') or '/usr/bin/ssh')
@@ -126,7 +135,9 @@ def run_openssh(command: Optional[str] = None, capture_output: bool = False, pay
     if command:
         ssh_argv.append(command)
 
-    subprocess.run(ssh_argv, capture_output=capture_output, input=payload)
+    completed_process = subprocess.run(ssh_argv, capture_output=capture_output, input=payload)
+    if capture_output:
+        return completed_process.stdout
 
 def run_paramiko(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None) -> Optional[bytes]:
     with get_remote_client().get_channel() as channel:
@@ -195,10 +206,10 @@ def run_paramiko(command: Optional[str] = None, capture_output: bool = False, pa
         if capture_output:
             return output
 
-def run_cmd(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None, client: str = 'paramiko') -> Optional[bytes]:
+def run_cmd(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None, client_type: str = 'paramiko') -> Optional[bytes]:
     """Run a command on the remote server. If capture_output is True, the standard out bytes are returned."""
 
-    if client == 'local' or 'DOJO_AUTH_TOKEN' in os.environ:
+    if client_type == 'local' or 'DOJO_AUTH_TOKEN' in os.environ:
         completed_process = subprocess.run(command or 'bash', shell=True, capture_output=capture_output, input=payload)
         if capture_output:
             return completed_process.stdout
@@ -206,12 +217,12 @@ def run_cmd(command: Optional[str] = None, capture_output: bool = False, payload
         if not request('/docker').json().get('success'):
             error('No active challenge session; start a challenge!')
 
-        if client == 'openssh':
+        if client_type == 'openssh':
             return run_openssh(command, capture_output, payload)
-        elif client == 'paramiko':
+        elif client_type == 'paramiko':
             return run_paramiko(command, capture_output, payload)
         else:
-            error(f'Invalid client: {client}')
+            error(f'Invalid client type: {client_type}')
 
 def download_file(remote_path: Path, local_path: Optional[Path] = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:

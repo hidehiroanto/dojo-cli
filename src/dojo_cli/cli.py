@@ -17,7 +17,7 @@ from .challenge import (
 from .config import DEFAULT_CONFIG_PATH, show_config
 from .editor import init_editor, mount_remote
 from .log import info
-from .remote import bat_file, download_file, print_file, run_cmd, ssh_keygen, upload_file
+from .remote import bat_file, download_file, edit_path, print_file, run_cmd, ssh_keygen, upload_file
 from .sensai import init_sensai
 from .shell import init_bash, init_fish, init_nu, init_zsh
 from .terminal import apply_style
@@ -65,9 +65,7 @@ def keygen():
 @app.command('profile', help='An alias for [bold cyan]whoami[/].', rich_help_panel='User Info')
 @app.command('me', help='An alias for [bold cyan]whoami[/].', rich_help_panel='User Info')
 @app.command(rich_help_panel='User Info')
-def whoami(
-    simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
-):
+def whoami(simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False):
     """Show information about the current user (you!)"""
 
     show_me(simple)
@@ -75,9 +73,7 @@ def whoami(
 @app.command('score', help='An alias for [bold cyan]whois[/].', rich_help_panel='User Info')
 @app.command('rank', help='An alias for [bold cyan]whois[/].', rich_help_panel='User Info')
 @app.command(rich_help_panel='User Info')
-def whois(
-    username: Annotated[Optional[str], Option('-u', '--username', help='Username to query')] = None,
-):
+def whois(username: Annotated[Optional[str], Option('-u', '--username', help='Username to query')] = None):
     """Show global ranking for another user. If no username is given, show the current user's ranking."""
 
     show_score(username)
@@ -198,9 +194,7 @@ def connect():
     run_cmd()
 
 @app.command(rich_help_panel='Remote Connection')
-def bash(
-    command_string: Annotated[Optional[str], Option('-c', help='Run the given command and then exit.')] = None
-):
+def bash(command_string: Annotated[Optional[str], Option('-c', help='Run the given command and then exit.')] = None):
     """Connect to the current challenge via a bash login shell."""
 
     init_bash(command_string)
@@ -236,9 +230,7 @@ def zellij():
     run_cmd('zellij')
 
 @app.command(rich_help_panel='Remote Connection')
-def zsh(
-    command: Annotated[Optional[str], Option('-c', help='Run the given command and then exit.')] = None
-):
+def zsh(command: Annotated[Optional[str], Option('-c', help='Run the given command and then exit.')] = None):
     """Connect to the current challenge via a zsh login shell."""
 
     init_zsh(command)
@@ -246,9 +238,7 @@ def zsh(
 @app.command('ssh', help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
 @app.command(help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
 @app.command('exec', rich_help_panel='Remote Execution')
-def run(
-    command: Annotated[Optional[str], Argument(help='The command to run')] = None
-):
+def run(command: Annotated[Optional[str], Argument(help='The command to run')] = None):
     """Execute a remote command. If no command is given, start a shell like [bold cyan]connect[/]."""
 
     run_cmd(command)
@@ -272,17 +262,13 @@ def dust(
     run_cmd(f'dust -CFprsx -n {count} {path or '~'} 2>/dev/null')
 
 @app.command(rich_help_panel='Remote Transfer')
-def bat(
-    path: Annotated[Path, Argument(help='The file to print')]
-):
+def bat(path: Annotated[Path, Argument(help='The file to print.')]):
     """Print the contents of a remote file to standard out using [bold cyan]bat[/]."""
 
     bat_file(path)
 
 @app.command(rich_help_panel='Remote Transfer')
-def cat(
-    path: Annotated[Path, Argument(help='The file to print')]
-):
+def cat(path: Annotated[Path, Argument(help='The file to print.')]):
     """Print the contents of a remote file to standard out."""
 
     print_file(path)
@@ -304,7 +290,7 @@ def download(
 @app.command(short_help='Upload a file from local to remote.', rich_help_panel='Remote Transfer')
 def upload(
     local_path: Annotated[Path, Argument(help='Path of local file.')],
-    remote_path: Annotated[Optional[Path], Argument(help='Path of remote directory or file.')] = None,
+    remote_path: Annotated[Optional[Path], Argument(help='Path of remote directory or file.')] = None
 ):
     """
     Upload a file from local to remote.
@@ -314,9 +300,7 @@ def upload(
     upload_file(local_path, remote_path)
 
 @app.command(short_help='Mount the current challenge locally.', rich_help_panel='Remote Editing')
-def mount(
-    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
-):
+def mount(mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None):
     """
     Mount the configured remote project path locally onto the specified mount point.
     If no mount point is specified, it defaults to the configured mount point.
@@ -328,9 +312,10 @@ def mount(
 def edit(
     editor: Annotated[Optional[str], Option('-e', '--editor', help='Name of the editor to use.')] = None,
     mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
 ):
     """
-    Mount the configured remote project path locally onto the specified mount point, and open it in the specified editor.
+    Mount the current challenge locally onto the given mount point, and open the given path in the given editor.
 
     If no editor is specified, it uses Visual Studio Code, unless otherwise configured.
     Supported editors include:
@@ -338,71 +323,105 @@ def edit(
         'Emacs'
         'Google Antigravity'
         'Helix'
+        'Kakoune'
         'Nano'
         'Neovim'
         'Sublime Text'
         'Vim'
         'Visual Studio Code'
+        'Windsurf'
         'Zed'
     If no mount point is specified, it defaults to the configured mount point.
+    If no path is specified, it defaults to the mount point.
     """
 
-    init_editor(editor, mount_point)
+    init_editor(editor, mount_point, path)
 
 @app.command('agy', rich_help_panel='Remote Editing')
-def antigravity():
+def antigravity(
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
+):
     """Mount the current challenge locally and open it in Google Antigravity."""
 
-    init_editor('Google Antigravity')
+    init_editor('Google Antigravity', mount_point, path)
 
 @app.command('code', rich_help_panel='Remote Editing')
-def vscode():
+def vscode(
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
+):
     """Mount the current challenge locally and open it in Visual Studio Code."""
 
-    init_editor('Visual Studio Code')
+    init_editor('Visual Studio Code', mount_point, path)
 
 @app.command(rich_help_panel='Remote Editing')
-def cursor():
+def cursor(
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
+):
     """Mount the current challenge locally and open it in Cursor."""
 
-    init_editor('Cursor')
+    init_editor('Cursor', mount_point, path)
 
 @app.command(rich_help_panel='Remote Editing')
-def emacs():
-    """Mount the current challenge locally and open it in Emacs."""
+def emacs(path: Annotated[Optional[Path], Argument(help='The path to open.')] = None):
+    """Open a remote directory or file in Emacs."""
 
-    init_editor('Emacs')
+    edit_path('emacs', path)
 
 @app.command('hx', rich_help_panel='Remote Editing')
-def helix():
+def helix(
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None):
     """Mount the current challenge locally and open it in Helix."""
 
-    init_editor('Helix')
+    init_editor('Helix', mount_point, path)
+
+@app.command('kak', rich_help_panel='Remote Editing')
+def kakoune(
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None):
+    """Mount the current challenge locally and open it in Kakoune."""
+
+    init_editor('Kakoune', mount_point, path)
 
 @app.command(rich_help_panel='Remote Editing')
-def nano():
-    """Mount the current challenge locally and open it in Nano."""
+def nano(path: Annotated[Path, Argument(help='The file to open.')]):
+    """Open a remote file in Nano."""
 
-    init_editor('Nano')
+    edit_path('nano', path)
 
 @app.command('nvim', rich_help_panel='Remote Editing')
-def neovim():
-    """Mount the current challenge locally and open it in Neovim."""
+def neovim(path: Annotated[Optional[Path], Argument(help='The path to open.')] = None):
+    """Open a remote directory or file in Neovim."""
 
-    init_editor('Neovim')
+    edit_path('nvim', path)
 
 @app.command('subl', rich_help_panel='Remote Editing')
-def sublime():
+def sublime(
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None
+):
     """Mount the current challenge locally and open it in Sublime Text."""
 
-    init_editor('Sublime Text')
+    init_editor('Sublime Text', mount_point, path)
+
+@app.command('surf', rich_help_panel='Remote Editing')
+def windsurf(
+    path: Annotated[Path, Argument(help='The file path to open, relative to the mount point.')],
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None,
+):
+    """Mount the current challenge locally and open a file in Windsurf."""
+
+    init_editor('Windsurf', mount_point, path)
 
 @app.command('vi', help='An alias for [bold cyan]vim[/].', rich_help_panel='Remote Editing')
 @app.command('vim', rich_help_panel='Remote Editing')
-def vim():
-    """Mount the current challenge locally and open it in Vim."""
+def vim(path: Annotated[Optional[Path], Argument(help='The path to open.')] = None):
+    """Open a remote directory or file in Vim."""
 
-    init_editor('Vim')
+    edit_path('vim', path)
 
 @app.command(rich_help_panel='Remote Editing')
 def zed(
@@ -412,7 +431,7 @@ def zed(
 ):
     """Open Zed, a minimal code editor written in Rust, and connect remotely to the current challenge."""
 
-    init_zed(install, use_lang_servers, use_mount)
+    init_editor('Zed') if use_mount else init_zed(install, use_lang_servers)
 
 @app.command(rich_help_panel='Challenge Help')
 def discord():
@@ -447,7 +466,7 @@ def solve(
     flag: Annotated[Optional[str], Option('-f', '--flag', help='Flag to submit.')] = None,
     dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
     module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
-    challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None,
+    challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None
 ):
     """
     Submit a flag for a challenge. Warns if flag is for wrong user or challenge.
@@ -459,9 +478,7 @@ def solve(
     submit_flag(flag, dojo_id, module_id, challenge_id)
 
 @app.command(rich_help_panel='CLI Configuration')
-def config(
-    show_default: Annotated[bool, Option('-d', '--default', help='Show the default configuration instead.')] = False
-):
+def config(show_default: Annotated[bool, Option('-d', '--default', help='Show the default configuration instead.')] = False):
     """Show the current configuration settings."""
 
     show_config(show_default)

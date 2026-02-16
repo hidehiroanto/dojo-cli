@@ -36,7 +36,7 @@ def load_cookie(cookie_path: Path) -> Optional[dict]:
 
 def save_cookie(cookie_jar: dict):
     cookie_path = Path(load_user_config()['cookie_path']).expanduser().resolve()
-    cookie_path.parent.mkdir(parents=True, exist_ok=True)
+    cookie_path.parent.mkdir(0o755, True, True)
     cookie_path.write_text(json.dumps(cookie_jar))
 
 def deserialize_auth_token(auth_token: str) -> Optional[list[int | str]]:

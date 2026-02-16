@@ -16,7 +16,6 @@ import tempfile
 
 from .client import get_remote_client
 from .config import load_user_config
-from .editor import init_editor
 from .http import request
 from .install import homebrew_install, uv_install, wax_install, zerobrew_install
 from .log import error, info, success, warn
@@ -80,7 +79,7 @@ def load_zed_settings() -> tuple[dict, list[str]]:
     return {}, []
 
 def save_zed_settings(zed_settings: dict, comment_list: list[str]):
-    ZED_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ZED_SETTINGS_PATH.parent.mkdir(0o755, True, True)
     comments = ''.join(comment + '\n' for comment in comment_list)
     ZED_SETTINGS_PATH.write_text(comments + json.dumps(zed_settings, indent=2, sort_keys=True))
 
@@ -235,11 +234,7 @@ def run_zed():
 
     subprocess.run(zed_argv)
 
-def init_zed(install: bool = False, use_lang_servers: bool = False, use_mount: bool = False):
-    if use_mount:
-        init_editor('Zed')
-        return
-
+def init_zed(install: bool = False, use_lang_servers: bool = False):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):

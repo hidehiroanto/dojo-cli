@@ -20,13 +20,13 @@ class RemoteClient(fuse.Operations):
         hostname = kwargs.get('hostname', ssh_config['HostName'])
         port = kwargs.get('port', ssh_config['Port'])
         username = kwargs.get('username', ssh_config['User'])
-        key_filename = kwargs.get('key_filename', ssh_config['IdentityFile'])
+        key_filename = Path(kwargs.get('key_filename', ssh_config['IdentityFile'])).expanduser().resolve()
         self.project_path = Path(kwargs.get('project_path', ssh_config['project_path']))
 
         self.ssh = SSHClient()
         self.ssh.load_system_host_keys()
         self.ssh.set_missing_host_key_policy(AutoAddPolicy())
-        self.ssh.connect(hostname, port, username, key_filename=key_filename)
+        self.ssh.connect(hostname, port, username, key_filename=str(key_filename))
         self.sftp: SFTPClient = self.ssh.open_sftp()
         self.sftp.chdir(str(self.project_path))
         self.use_ns = True
