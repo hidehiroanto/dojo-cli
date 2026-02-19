@@ -20,7 +20,8 @@ def delete_cookie():
     cookie_path.unlink()
 
 def load_cookie(cookie_path: Path) -> Optional[dict]:
-    assert cookie_path.is_file()
+    if not cookie_path.is_file():
+        error('You are not logged in.')
     try:
         cookie_jar = json.loads(cookie_path.read_text())
     except json.JSONDecodeError:

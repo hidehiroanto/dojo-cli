@@ -3,18 +3,18 @@ Handles installing, updating, and launching SSHFS and code editors.
 """
 
 # TODO: Add more package managers, Windows support?
-# TODO: Move mount stuff to mount.py?
+# TODO: Move mount stuff to client.py or mount.py?
 
 import mfusepy as fuse
 import os
 from pathlib import Path
 from shutil import which
 import subprocess
-import sys
 from typing import Optional
 
 from .client import RemoteClient
 from .config import load_user_config
+from .constants import UNAME_SYSTEM
 from .http import request
 from .install import homebrew_install, wax_install, zerobrew_install
 from .log import error, info, warn
@@ -29,6 +29,7 @@ SUPPORTED_EDITORS = {
         'brew': {'formulae': ['codeedit-cli'], 'casks': ['codeedit'], 'taps': ['codeeditapp/formulae']}
     },
     'Cursor': {'cli': 'cursor', 'brew': {'casks': ['cursor']}},
+    'Eclipse Theia': {'cli': '/Applications/TheiaIDE.app/Contents/MacOS/TheiaIDE', 'brew': {'casks': ['theiaide']}},
     'Emacs': {'cli': 'emacs', 'brew': {'formulae': ['emacs']}},
     'Google Antigravity': {'cli': 'agy', 'brew': {'casks': ['antigravity']}},
     'Helix': {'cli': 'hx', 'brew': {'formulae': ['helix']}},
@@ -39,6 +40,7 @@ SUPPORTED_EDITORS = {
     'Neovim': {'cli': 'nvim', 'brew': {'formulae': ['neovim']}},
     'PyCharm': {'cli': 'pycharm', 'brew': {'casks': ['pycharm']}},
     'Sublime Text': {'cli': 'subl', 'brew': {'casks': ['sublime-text']}},
+    'TextMate': {'cli': 'mate', 'brew': {'casks': ['textmate']}},
     'Vim': {'cli': 'vim', 'brew': {'formulae': ['vim']}},
     'Visual Studio Code': {'cli': 'code', 'brew': {'casks': ['visual-studio-code']}},
     'VSCodium': {'cli': 'codium', 'brew': {'casks': ['vscodium']}},
@@ -53,7 +55,7 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
         error('Challenge is not running, start a challenge first.')
 
     user_config = load_user_config()
-    package_manager = user_config['package_manager'][sys.platform]
+    package_manager = user_config['package_manager'][UNAME_SYSTEM]
 
     ssh_config = user_config['ssh']
     project_path = Path(ssh_config['project_path'])
@@ -67,7 +69,7 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
         return
 
     if mode == 'mfusepy':
-        if sys.platform == 'darwin':
+        if UNAME_SYSTEM == 'Darwin':
             # maybe use macfuse instead when macfuse 5.2 comes out without kext
             info('Installing fuse-t...')
             if package_manager == 'homebrew':
@@ -80,10 +82,10 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
             else:
                 # TODO: Implement "manual" fuse-t installation
                 error('Please install fuse-t manually.')
-        elif sys.platform == 'linux':
+        elif UNAME_SYSTEM == 'Linux':
             # libfuse should already be shipped by all major Linux distributions
             error('libfuse should already be shipped by all major Linux distributions. If not, install it manually.')
-        elif sys.platform == 'win32':
+        elif UNAME_SYSTEM == 'Windows':
             error('Windows is not yet supported.')
         else:
             error('Your OS is not yet supported.')
@@ -96,7 +98,7 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
     elif mode == 'sshfs':
         sshfs = Path(which('sshfs') or USR_LOCAL_BIN_DIR / 'sshfs')
         if not sshfs.is_file():
-            if sys.platform == 'darwin':
+            if UNAME_SYSTEM == 'Darwin':
                 # maybe use macfuse + sshfs when macfuse 5.2 comes out without kext
                 info('Installing fuse-t-sshfs...')
                 if package_manager == 'homebrew':
@@ -110,7 +112,7 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
                 else:
                     # TODO: Implement "manual" fuse-t-sshfs installation
                     error('Please install fuse-t-sshfs manually.')
-            elif sys.platform == 'linux':
+            elif UNAME_SYSTEM == 'Linux':
                 # sshfs should already be shipped by all major Linux distributions
                 if package_manager == 'homebrew':
                     homebrew_install(['sshfs'])
@@ -121,7 +123,7 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
                 else:
                     # TODO: Implement "manual" sshfs installation
                     error('Please install sshfs manually.')
-            elif sys.platform == 'win32':
+            elif UNAME_SYSTEM == 'Windows':
                 error('Windows is not yet supported.')
             else:
                 error('Your OS is not yet supported.')
@@ -139,24 +141,24 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
         else:
             error('Something went wrong with the SSH config file or the SSH key, please make sure at least one is valid.')
 
-    if sys.platform == 'darwin':
+    if UNAME_SYSTEM == 'Darwin':
         info(f'To unmount, run: [bold cyan]diskutil umount {mount_point}[/]')
         info(f'If that does not work, run: [bold cyan]diskutil umount force {mount_point}[/]')
-    elif sys.platform == 'linux':
+    elif UNAME_SYSTEM == 'Linux':
         info(f'To unmount, run: [bold cyan]umount {mount_point}[/]')
         info(f'If that does not work, run: [bold cyan]umount -f {mount_point}[/]')
-    elif sys.platform == 'win32':
+    elif UNAME_SYSTEM == 'Windows':
         info(f'To unmount, run: [bold cyan]net use {mount_point} /d[/]')
         info(f'If that does not work, run: [bold cyan]net use {mount_point} /d /y[/]')
     else:
-        error(f'Unsupported platform: {sys.platform}')
+        error(f'Unsupported platform: {UNAME_SYSTEM}')
 
 def install_editor(editor):
     if which(editor['cli']) or (USR_LOCAL_BIN_DIR / editor['cli']).is_file() or (USR_BIN_DIR / editor['cli']).is_file():
         info(f'{editor['cli']} is already installed.')
         return
 
-    package_manager = load_user_config()['package_manager'][sys.platform]
+    package_manager = load_user_config()['package_manager'][UNAME_SYSTEM]
     if package_manager == 'homebrew':
         homebrew_install(editor['brew'].get('formulae'), editor['brew'].get('casks'), editor['brew'].get('taps'))
     elif package_manager == 'wax':
@@ -168,7 +170,7 @@ def install_editor(editor):
         # TODO: Implement "manual" editor installation
         error(f'Please install {editor['cli']} manually.')
 
-def run_editor(editor_name: str, mount_point: Optional[Path] = None, path: Optional[Path] = None):
+def run_editor(editor_name: str, path: Optional[Path] = None, mount_point: Optional[Path] = None):
     cli = str(SUPPORTED_EDITORS[editor_name]['cli']) if editor_name in SUPPORTED_EDITORS else editor_name
     which_cli = which(cli)
 
@@ -192,16 +194,16 @@ def run_editor(editor_name: str, mount_point: Optional[Path] = None, path: Optio
 
     subprocess.run([cli_path, path_to_open])
 
-def init_editor(editor_name: Optional[str] = None, mount_point: Optional[Path] = None, path: Optional[Path] = None):
+def init_editor(editor_name: Optional[str] = None, path: Optional[Path] = None, mount_point: Optional[Path] = None):
     if not editor_name:
-        editor_name = load_user_config()['code_editor']
+        editor_name = load_user_config()['editor']
 
     mount_remote(mount_point)
 
     if editor_name in SUPPORTED_EDITORS:
         install_editor(SUPPORTED_EDITORS[editor_name])
 
-    if sys.platform == 'darwin':
+    if UNAME_SYSTEM == 'Darwin':
         warn(f'You may see a popup like: [bold yellow]{editor_name}.app would like to access files on a network volume.[/]')
         warn('If so, please click [bold green]Allow[/].')
         warn('Otherwise, you may need to enable Full Disk Access so that the editor can access the mounted volume.')
@@ -210,4 +212,4 @@ def init_editor(editor_name: Optional[str] = None, mount_point: Optional[Path] =
         warn('Press Enter to dismiss this message.')
         input()
 
-    run_editor(editor_name, mount_point, path)
+    run_editor(editor_name, path, mount_point)

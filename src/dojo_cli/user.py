@@ -17,7 +17,7 @@ def do_login(username: Optional[str] = None, password: Optional[str] = None):
     while not username:
         username = input('Enter username or email: ')
     while not password:
-        password = getpass('Enter password: ', echo_char=load_user_config()['echo_char'])
+        password = getpass('Enter password: ', echo_char=load_user_config()['password_echo_char'])
 
     with Session() as session:
         credentials = {'name': username, 'password': password}

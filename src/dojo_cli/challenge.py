@@ -18,12 +18,12 @@ from .remote import run_cmd
 from .terminal import apply_style
 from .utils import can_render_image, download_image, get_belt_hex, show_table
 
-def parse_challenge_path(challenge_id: str, challenge_data: dict = {}) -> tuple:
+def parse_challenge_path(challenge_id: str, chal_data: dict = {}) -> tuple:
     if re.fullmatch(r'[\-\w]+', challenge_id):
-        if not challenge_data:
-            challenge_data = request('/docker').json()
-        if challenge_data.get('success'):
-            return challenge_data.get('dojo'), challenge_data.get('module'), challenge_id
+        if not chal_data:
+            chal_data = request('/docker').json()
+        if chal_data.get('success'):
+            return chal_data.get('dojo'), chal_data.get('module'), challenge_id
         return tuple()
 
     result = re.findall(r'/?([\-\~\w]+)/([\-\w]+)/([\-\w]+)', challenge_id)
@@ -219,12 +219,12 @@ def init_challenge(dojo_id: Optional[str] = None, module_id: Optional[str] = Non
     else:
         practice = chal_data.get('practice', False)
 
-    request_json = {'dojo': dojo_id, 'module': module_id, 'challenge': challenge_id, 'practice': practice}
-    response = request('/docker', csrf=True, json=request_json).json()
-    if response.get('success'):
+    challenge_data = {'dojo': dojo_id, 'module': module_id, 'challenge': challenge_id, 'practice': practice}
+    docker_response = request('/docker', csrf=True, json=challenge_data).json()
+    if docker_response.get('success'):
         success('Challenge started successfully!')
-    elif response.get('error'):
-        error(response['error'])
+    elif docker_response.get('error'):
+        error(docker_response['error'])
     else:
         error('Failed to start challenge.')
 
@@ -262,25 +262,30 @@ def restart_challenge(normal: bool = False, privileged: bool = False):
 
     init_challenge(normal=normal, privileged=privileged)
 
-def show_status():
-    response = request('/docker').json()
-    if response.get('success'):
-        response.pop('success')
-        show_table(response, 'Challenge Status')
-    else:
-        fail(response.get('error'))
-
 def stop_challenge():
-    response = request('/docker').json()
-    if response.get('success'):
-        if response.get('practice'):
-            run_cmd('sudo kill 1', True)
-            if not request('/docker').json().get('success'):
-                success('Challenge stopped successfully!')
+    docker_response = request('/docker').json()
+    if docker_response.get('success'):
+        if not docker_response.get('practice'):
+            chal_data = {'dojo': 'welcome', 'module': 'welcome', 'challenge': 'practice', 'practice': True}
+            docker_response = request('/docker', csrf=True, json=chal_data).json()
+            if not docker_response.get('success'):
+                error(docker_response.get('error', 'Something went wrong.'))
+        run_cmd('sudo kill 1', True)
+        docker_response = request('/docker').json()
+        if not docker_response.get('success'):
+            success('Challenge stopped successfully!')
         else:
-            error('Challenge is in normal mode, cannot stop container without root privileges.')
+            error('Challenge stopped unsuccessfully.')
     else:
         error('No active challenge session; start a challenge!')
+
+def show_status():
+    docker_response = request('/docker').json()
+    if docker_response.get('success'):
+        docker_response.pop('success')
+        show_table(docker_response, 'Challenge Status')
+    else:
+        fail(docker_response.get('error'))
 
 def show_hint(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None):
     (dojo_id, module_id, challenge_id), (account_id, challenge_num_id) = get_challenge_info(dojo_id, module_id, challenge_id)
@@ -368,30 +373,28 @@ def submit_flag(flag: Optional[str] = None, dojo_id: Optional[str] = None, modul
     # )
     # rprint(response.json().get('data').get('message'))
 
-    response = request(
+    solve_response = request(
         f'/dojos/{dojo_id}/{module_id}/{challenge_id}/solve',
         csrf='DOJO_AUTH_TOKEN' not in os.environ,
         json={'submission': flag}
     )
 
-    result = response.json()
-
-    if response.ok:
-        if result.get('status') == 'solved':
+    if solve_response.ok:
+        if solve_response.json().get('status') == 'solved':
             success('The flag is correct! You have successfully solved the challenge!')
-        elif result.get('status') == 'already_solved':
+        elif solve_response.json().get('status') == 'already_solved':
             warn('You have already solved this challenge!')
         else:
-            info(str(result))
-    elif response.status_code == 400:
-        if result.get('status') == 'incorrect':
+            info(str(solve_response.json()))
+    elif solve_response.status_code == 400:
+        if solve_response.json().get('status') == 'incorrect':
             fail('The flag is incorrect.')
         else:
-            error(str(result))
-    elif response.status_code == 404:
-        if result.get('error') == 'Challenge not found':
+            error(str(solve_response.json()))
+    elif solve_response.status_code == 404:
+        if solve_response.json().get('error') == 'Challenge not found':
             error('The challenge does not exist.')
         else:
-            error(str(result))
+            error(str(solve_response.json()))
     else:
-        error(f'Failed to submit the flag (code: {response.status_code}).')
+        error(f'Failed to submit the flag (code: {solve_response.status_code}).')

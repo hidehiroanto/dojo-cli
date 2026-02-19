@@ -21,7 +21,7 @@ from .remote import bat_file, download_file, edit_path, print_file, run_cmd, ssh
 from .sensai import init_sensai
 from .shell import init_bash, init_fish, init_nu, init_zsh
 from .terminal import apply_style
-from .tui import init_tui
+from .tui import init_trogon
 from .user import do_login, do_logout, show_belts, show_me, show_score, show_scoreboard
 from .zed import init_zed
 
@@ -176,7 +176,7 @@ def restart(
 # maybe implement a backend option so it works in normal mode
 @app.command(rich_help_panel='Challenge Launch')
 def stop():
-    """Stop the current challenge. Only works in privileged mode for now."""
+    """Stop the current challenge."""
 
     stop_challenge()
 
@@ -320,8 +320,9 @@ def edit(
     If no path is specified, it defaults to the mount point.
     If no editor is specified, it uses Visual Studio Code, unless otherwise configured.
     Supported editors include:
-        'CodeEdit'
+        'CodeEdit' (macOS only, very broken)
         'Cursor'
+        'Eclipse Theia' (macOS only for now)
         'Emacs'
         'Google Antigravity'
         'Helix'
@@ -332,6 +333,7 @@ def edit(
         'Neovim'
         'PyCharm'
         'Sublime Text'
+        'TextMate'
         'Vim'
         'Visual Studio Code'
         'VSCodium'
@@ -340,7 +342,7 @@ def edit(
     If no mount point is specified, it defaults to the configured mount point.
     """
 
-    init_editor(editor, mount_point, path)
+    init_editor(editor, path, mount_point)
 
 @app.command('agy', rich_help_panel='Remote Editing')
 def antigravity(
@@ -349,7 +351,7 @@ def antigravity(
 ):
     """Mount the current challenge locally and open it in Google Antigravity."""
 
-    init_editor('Google Antigravity', mount_point, path)
+    init_editor('Google Antigravity', path, mount_point)
 
 @app.command('code', rich_help_panel='Remote Editing')
 def vscode(
@@ -358,16 +360,16 @@ def vscode(
 ):
     """Mount the current challenge locally and open it in Visual Studio Code."""
 
-    init_editor('Visual Studio Code', mount_point, path)
+    init_editor('Visual Studio Code', path, mount_point)
 
 @app.command(rich_help_panel='Remote Editing')
 def codeedit(
     path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
     mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
 ):
-    """Mount the current challenge locally and open it in CodeEdit. (MacOS only, very broken)"""
+    """Mount the current challenge locally and open it in CodeEdit. (macOS only, very broken)"""
 
-    init_editor('CodeEdit', mount_point, path)
+    init_editor('CodeEdit', path, mount_point)
 
 @app.command('codium', rich_help_panel='Remote Editing')
 def vscodium(
@@ -376,7 +378,7 @@ def vscodium(
 ):
     """Mount the current challenge locally and open it in VSCodium."""
 
-    init_editor('VSCodium', mount_point, path)
+    init_editor('VSCodium', path, mount_point)
 
 @app.command(rich_help_panel='Remote Editing')
 def cursor(
@@ -385,7 +387,7 @@ def cursor(
 ):
     """Mount the current challenge locally and open it in Cursor."""
 
-    init_editor('Cursor', mount_point, path)
+    init_editor('Cursor', path, mount_point)
 
 @app.command(rich_help_panel='Remote Editing')
 def emacs(path: Annotated[Optional[Path], Argument(help='The path to open.')] = None):
@@ -400,7 +402,7 @@ def helix(
 ):
     """Mount the current challenge locally and open it in Helix."""
 
-    init_editor('Helix', mount_point, path)
+    init_editor('Helix', path, mount_point)
 
 @app.command('kak', rich_help_panel='Remote Editing')
 def kakoune(
@@ -409,7 +411,7 @@ def kakoune(
 ):
     """Mount the current challenge locally and open a mounted file in Kakoune."""
 
-    init_editor('Kakoune', mount_point, path)
+    init_editor('Kakoune', path, mount_point)
 
 @app.command(rich_help_panel='Remote Editing')
 def lapce(
@@ -418,7 +420,16 @@ def lapce(
 ):
     """Mount the current challenge locally and open it in Lapce."""
 
-    init_editor('Lapce', mount_point, path)
+    init_editor('Lapce', path, mount_point)
+
+@app.command('mate', rich_help_panel='Remote Editing')
+def textmate(
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
+):
+    """Mount the current challenge locally and open it in TextMate."""
+
+    init_editor('TextMate', path, mount_point)
 
 @app.command(rich_help_panel='Remote Editing')
 def micro(
@@ -427,7 +438,7 @@ def micro(
 ):
     """Mount the current challenge locally and open a mounted file in Micro."""
 
-    init_editor('Micro', mount_point, path)
+    init_editor('Micro', path, mount_point)
 
 @app.command(rich_help_panel='Remote Editing')
 def nano(path: Annotated[Path, Argument(help='The file path to open.')]):
@@ -448,7 +459,7 @@ def pycharm(
 ):
     """Mount the current challenge locally and open it in PyCharm."""
 
-    init_editor('PyCharm', mount_point, path)
+    init_editor('PyCharm', path, mount_point)
 
 @app.command('subl', rich_help_panel='Remote Editing')
 def sublime(
@@ -457,7 +468,16 @@ def sublime(
 ):
     """Mount the current challenge locally and open it in Sublime Text."""
 
-    init_editor('Sublime Text', mount_point, path)
+    init_editor('Sublime Text', path, mount_point)
+
+@app.command(rich_help_panel='Remote Editing')
+def theia(
+    path: Annotated[Optional[Path], Argument(help='The path to open, relative to the mount point.')] = None,
+    mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None
+):
+    """Mount the current challenge locally and open it in Eclipse Theia. (macOS only for now)"""
+
+    init_editor('Eclipse Theia', path, mount_point)
 
 @app.command('surf', rich_help_panel='Remote Editing')
 def windsurf(
@@ -466,10 +486,10 @@ def windsurf(
 ):
     """Mount the current challenge locally and open it in Windsurf."""
 
-    init_editor('Windsurf', mount_point, path)
+    init_editor('Windsurf', path, mount_point)
 
 @app.command('vi', help='An alias for [bold cyan]vim[/].', rich_help_panel='Remote Editing')
-@app.command('vim', rich_help_panel='Remote Editing')
+@app.command(rich_help_panel='Remote Editing')
 def vim(path: Annotated[Optional[Path], Argument(help='The path to open.')] = None):
     """Open a remote directory or file in Vim."""
 
@@ -539,4 +559,4 @@ def config(show_default: Annotated[bool, Option('-d', '--default', help='Show th
 def help():
     """Start a TUI to explore command documentation for the CLI. Press [bold cyan]^q[/] to quit."""
 
-    init_tui(app)
+    init_trogon(app)

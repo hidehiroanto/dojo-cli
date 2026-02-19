@@ -10,6 +10,8 @@ from rich import print as rprint
 import sys
 import yaml
 
+from .constants import SSH_HOME, XDG_CACHE_HOME, XDG_CONFIG_HOME, XDG_DATA_HOME
+
 DEFAULT_CONFIG = {
     'api': '/pwncollege_api/v1',
     'base_url': 'https://pwn.college',
@@ -22,9 +24,8 @@ DEFAULT_CONFIG = {
         'purple': '#7b2f8e',
         'black': '#111111'
     },
-    'code_editor': 'Visual Studio Code',
-    'cookie_path': '~/.cache/dojo-cli/cookie.json',
-    'echo_char': '*',
+    'cookie_path': str(XDG_CACHE_HOME / 'dojo-cli' / 'cookie.json'),
+    'editor': 'Visual Studio Code',
     'log_styles': {
         'error': 'on red',
         'fail': 'bold red',
@@ -48,20 +49,21 @@ DEFAULT_CONFIG = {
         'url': 'bright_blue'
     },
     'package_manager': {
-        'darwin': 'homebrew',
-        'linux': 'homebrew',
-        'win32': 'scoop'
+        'Darwin': 'homebrew',
+        'Linux': 'homebrew',
+        'Windows': 'scoop'
     },
+    'password_echo_char': '*',
     'ssh': {
         'Host': 'pwn.college',
         'HostName': 'dojo.pwn.college',
         'Port': 22,
         'User': 'hacker',
-        'IdentityFile': '~/.ssh/id_ed25519',
+        'IdentityFile': str(SSH_HOME / 'id_ed25519'),
         'ServerAliveInterval': 20,
         'ServerAliveCountMax': 3,
-        'config_file': '~/.ssh/config',
-        'mount_point': '~/.local/share/dojo-cli/mnt',
+        'config_file': str(SSH_HOME / 'config'),
+        'mount_point': str(XDG_DATA_HOME / 'dojo-cli' / 'mnt'),
         'project_path': '/home/hacker'
     },
     'table': {
@@ -73,7 +75,7 @@ DEFAULT_CONFIG = {
     }
 }
 
-DEFAULT_CONFIG_PATH = Path('~/.config/dojo-cli/config')
+DEFAULT_CONFIG_PATH = XDG_CONFIG_HOME / 'dojo-cli' / 'config'
 
 user_config = {}
 

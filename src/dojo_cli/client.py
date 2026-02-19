@@ -1,3 +1,7 @@
+"""
+This file contains the implementation of the RemoteClient class.
+"""
+
 import errno
 import mfusepy as fuse
 from pathlib import Path
@@ -30,6 +34,13 @@ class RemoteClient(fuse.Operations):
         self.sftp: SFTPClient = self.ssh.open_sftp()
         self.sftp.chdir(str(self.project_path))
         self.use_ns = True
+
+    def __enter__(self) -> RemoteClient:
+        return self
+
+    def __exit__(self, exc_type, exc_val, traceback):
+        self.sftp.close()
+        self.ssh.close()
 
     @fuse.overrides(fuse.Operations)
     def chmod(self, path: str, mode: int) -> int:
@@ -99,13 +110,13 @@ class RemoteClient(fuse.Operations):
         return []
 
     def makedirs(self, path: str):
-        """This is identical to running 'mkdir -p <path>' remotely."""
+        """This is identical to running: mkdir -p <path>"""
 
         for parent in map(str, Path(path).parents[::-1]):
             if not self.is_dir(parent):
-                self.mkdir(parent, 0o755)
+                self.sftp.mkdir(parent, 0o755)
         if not self.is_dir(path):
-            self.mkdir(path, 0o755)
+            self.sftp.mkdir(path, 0o755)
 
     @fuse.overrides(fuse.Operations)
     def mkdir(self, path: str, mode: int) -> int:
@@ -121,7 +132,7 @@ class RemoteClient(fuse.Operations):
             return f.read(size)
 
     def read_bytes(self, path: str) -> bytes:
-        with get_remote_client().sftp.open(path) as f:
+        with self.sftp.open(path) as f:
             return f.read()
 
     @fuse.overrides(fuse.Operations)
@@ -133,18 +144,14 @@ class RemoteClient(fuse.Operations):
         return self.sftp.readlink(path)
 
     def remove(self, path: str):
-        """This is identical to running 'rm -r <path>' remotely."""
+        """This is identical to running: rm -r <path>"""
 
         if self.is_dir(path):
             for child in self.listdir(path):
-                child_path = str(Path(path) / child)
-                if self.is_dir(child_path):
-                    self.remove(child_path)
-                else:
-                    self.unlink(child_path)
-            self.rmdir(path)
+                self.remove(str(Path(path) / child))
+            self.sftp.rmdir(path)
         elif self.is_file(path):
-            self.unlink(path)
+            self.sftp.unlink(path)
 
     @fuse.overrides(fuse.Operations)
     def rename(self, old: str, new: str) -> int:

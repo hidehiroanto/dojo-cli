@@ -10,25 +10,24 @@ from pathlib import Path
 from shutil import which
 import requests
 import subprocess
-import sys
 import tarfile
 import tempfile
 
 from .client import get_remote_client
 from .config import load_user_config
+from .constants import UNAME_SYSTEM, XDG_BIN_HOME, XDG_CONFIG_HOME
 from .http import request
 from .install import homebrew_install, uv_install, wax_install, zerobrew_install
 from .log import error, info, success, warn
 from .remote import run_cmd, upload_file
 
 HOME_DIR_MAX_SIZE = 1_000_000_000
-LOCAL_BIN_DIR = Path('~/.local/bin').expanduser()
 
 ZED_ARCH = 'zed-remote-server-linux-x86_64'
 ZED_DOCS_URL = 'https://zed.dev/docs/remote-development'
 ZED_INSTALL_URL = 'https://zed.dev/install.sh'
 ZED_RELEASES_URL = 'https://api.github.com/repos/zed-industries/zed/releases'
-ZED_SETTINGS_PATH = Path('~/.config/zed/settings.json').expanduser()
+ZED_SETTINGS_PATH = XDG_CONFIG_HOME / 'zed' / 'settings.json'
 
 RUFF_ARCH = 'ruff-x86_64-unknown-linux-gnu'
 RUFF_LATEST_URL = 'https://api.github.com/repos/astral-sh/ruff/releases/latest'
@@ -36,8 +35,8 @@ TY_ARCH = 'ty-x86_64-unknown-linux-gnu'
 TY_LATEST_URL = 'https://api.github.com/repos/astral-sh/ty/releases/latest'
 
 def install_zed():
-    package_manager = load_user_config()['package_manager'][sys.platform]
-    if sys.platform in ['darwin', 'linux']:
+    package_manager = load_user_config()['package_manager'][UNAME_SYSTEM]
+    if UNAME_SYSTEM in ['Darwin', 'Linux']:
         # TODO: add support for other package managers
         if package_manager == 'homebrew':
             homebrew_install(casks=['zed'])
@@ -48,24 +47,24 @@ def install_zed():
         else:
             # This just reinstalls Zed, it's easier than checking GitHub for the latest version
             subprocess.run(requests.get(ZED_INSTALL_URL).text, shell=True)
-    elif sys.platform == 'win32':
+    elif UNAME_SYSTEM == 'Windows':
         error('Windows is not yet supported.')
     else:
         error('Your OS is not yet supported.')
 
 def install_lang_servers(lang_servers: list[str]):
-    package_manager = load_user_config()['package_manager'][sys.platform]
-    if sys.platform in ['darwin', 'linux']:
+    package_manager = load_user_config()['package_manager'][UNAME_SYSTEM]
+    if UNAME_SYSTEM in ['Darwin', 'Linux']:
         # TODO: add support for other package managers
         if package_manager == 'homebrew':
-            homebrew_install(lang_servers)
+            homebrew_install(lang_servers, skip_update=True)
         elif package_manager == 'wax':
-            wax_install(lang_servers)
+            wax_install(lang_servers, skip_update=True)
         elif package_manager == 'zerobrew':
-            zerobrew_install(lang_servers)
+            zerobrew_install(lang_servers, skip_update=True)
         else:
             uv_install(tools=lang_servers)
-    elif sys.platform == 'win32':
+    elif UNAME_SYSTEM == 'Windows':
         error('Windows is not yet supported.')
     else:
         error('Your OS is not yet supported.')
@@ -109,13 +108,16 @@ def upload_zed_server():
     client.makedirs(str(zed_server_dir))
     zed_old_versions = client.listdir(str(zed_server_dir))
 
-    if sys.platform in ['darwin', 'linux']:
-        zed_cli = Path(which('zed') or LOCAL_BIN_DIR / 'zed')
-        if not zed_cli.is_file() or not zed_cli.is_symlink():
+    if UNAME_SYSTEM in ['Darwin', 'Linux']:
+        zed_cli = Path(which('zed') or XDG_BIN_HOME / 'zed').resolve()
+        if not zed_cli.is_file():
             error('Please install the Zed CLI first.')
-        zed_root = zed_cli.resolve().parent.parent
-        zed_app = zed_root / ('MacOS/zed' if sys.platform == 'darwin' else 'libexec/zed-editor')
-    elif sys.platform == 'win32':
+
+        if UNAME_SYSTEM == 'Darwin':
+            zed_app = zed_cli.parent / 'zed'
+        elif UNAME_SYSTEM == 'Linux':
+            zed_app = zed_cli.parent.parent / 'libexec' / 'zed-editor'
+    elif UNAME_SYSTEM == 'Windows':
         error(f'Windows is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
     else:
         error(f'Your OS is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
@@ -199,11 +201,11 @@ def run_zed():
     ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
 
-    zed = Path(which('zed') or LOCAL_BIN_DIR / 'zed')
-    if not zed.is_file():
+    zed_cli = Path(which('zed') or XDG_BIN_HOME / 'zed')
+    if not zed_cli.is_file():
         error('Please upgrade zed to the latest version and ensure its parent directory is in PATH.')
     if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
-        zed_argv = [zed, f'ssh://{ssh_config['Host']}{ssh_config['project_path']}']
+        zed_argv = [zed_cli, f'ssh://{ssh_config['Host']}{ssh_config['project_path']}']
     elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
         # TODO: Switch to deep merge
         zed_settings, comment_list = load_zed_settings()
@@ -226,7 +228,7 @@ def run_zed():
             save_zed_settings(zed_settings, comment_list)
 
         zed_argv = [
-            zed,
+            zed_cli,
             f'ssh://{ssh_config['User']}@{ssh_config['HostName']}:{ssh_config['Port']}{ssh_config['project_path']}'
         ]
     else:
@@ -247,9 +249,9 @@ def init_zed(install: bool = False, use_lang_servers: bool = False):
         if use_lang_servers:
             install_lang_servers(lang_servers)
 
-    if sys.platform in ['darwin', 'linux']:
+    if UNAME_SYSTEM in ['Darwin', 'Linux']:
         upload_zed_server()
-    elif sys.platform == 'win32':
+    elif UNAME_SYSTEM == 'Windows':
         warn(f'Windows is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
     else:
         warn(f'Your OS is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')

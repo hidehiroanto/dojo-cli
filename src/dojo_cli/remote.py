@@ -82,34 +82,75 @@ def ssh_keygen():
         info('Enter the above key into the [bold cyan]Add New SSH Key[/] field, and then click [bold cyan]Add[/].')
 
 def bat_file(path: Path):
-    client = get_remote_client()
-    if client.is_dir(str(path)):
-        error(f'{apply_style(path)} is a directory.')
-    elif not client.is_file(str(path)):
-        error(f'{apply_style(path)} is not an existing file.')
+    if 'DOJO_AUTH_TOKEN' in os.environ:
+        if path.is_dir():
+            error(f'{apply_style(path)} is a directory.')
+        elif not path.is_file():
+            error(f'{apply_style(path)} is not an existing file.')
+        elif not os.access(path, os.R_OK):
+            error(f'Permission to read {apply_style(path)} denied.')
 
-    run_cmd(shlex.join(['bat', str(path)]))
+        subprocess.run([which('bat') or '/run/dojo/bin/bat', path])
+
+    else:
+        if not request('/docker').json().get('success'):
+            error('No active challenge session; start a challenge!')
+
+        client = get_remote_client()
+        if client.is_dir(str(path)):
+            error(f'{apply_style(path)} is a directory.')
+        elif not client.is_file(str(path)):
+            error(f'{apply_style(path)} is not an existing file.')
+
+        run_cmd(shlex.join(['bat', str(path)]))
 
 def print_file(path: Path):
-    client = get_remote_client()
-    if client.is_dir(str(path)):
-        error(f'{apply_style(path)} is a directory.')
-    elif not client.is_file(str(path)):
-        error(f'{apply_style(path)} is not an existing file.')
+    if 'DOJO_AUTH_TOKEN' in os.environ:
+        if path.is_dir():
+            error(f'{apply_style(path)} is a directory.')
+        elif not path.is_file():
+            error(f'{apply_style(path)} is not an existing file.')
+        elif not os.access(path, os.R_OK):
+            error(f'Permission to read {apply_style(path)} denied.')
 
-    try:
-        sys.stdout.buffer.write(client.read_bytes(str(path)))
+        sys.stdout.buffer.write(path.read_bytes())
         sys.stdout.buffer.flush()
-    except PermissionError:
-        error(f'Permission to read {apply_style(path)} denied.')
+
+    else:
+        if not request('/docker').json().get('success'):
+            error('No active challenge session; start a challenge!')
+
+        client = get_remote_client()
+        if client.is_dir(str(path)):
+            error(f'{apply_style(path)} is a directory.')
+        elif not client.is_file(str(path)):
+            error(f'{apply_style(path)} is not an existing file.')
+
+        try:
+            sys.stdout.buffer.write(client.read_bytes(str(path)))
+            sys.stdout.buffer.flush()
+        except PermissionError:
+            error(f'Permission to read {apply_style(path)} denied.')
 
 def edit_path(editor: str, path: Optional[Path] = None):
-    client = get_remote_client()
-    if not path:
-        path = Path(load_user_config()['ssh']['project_path'])
-    if editor == 'nano' and client.is_dir(str(path)):
-        error('Nano does not support opening directories.')
-    run_cmd(shlex.join([editor, str(path)]) if path else editor)
+    if 'DOJO_AUTH_TOKEN' in os.environ:
+        if not path:
+            if editor not in ['nano']:
+                path = Path.cwd()
+        elif editor in ['nano'] and path.is_dir():
+            error(f'{editor} does not support opening directories.')
+
+        subprocess.run([editor, path] if path else [editor])
+
+    else:
+        if not request('/docker').json().get('success'):
+            error('No active challenge session; start a challenge!')
+        if not path and editor not in ['nano']:
+            path = Path(load_user_config()['ssh']['project_path'])
+        elif editor in ['nano'] and get_remote_client().is_dir(str(path)):
+            error(f'{editor} does not support opening directories.')
+
+        run_cmd(shlex.join([editor, str(path)]) if path else editor)
 
 def run_openssh(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None) -> Optional[bytes]:
     ssh = Path(which('ssh') or '/usr/bin/ssh')
@@ -213,16 +254,14 @@ def run_cmd(command: Optional[str] = None, capture_output: bool = False, payload
         completed_process = subprocess.run(command or 'bash', shell=True, capture_output=capture_output, input=payload)
         if capture_output:
             return completed_process.stdout
+    elif not request('/docker').json().get('success'):
+        error('No active challenge session; start a challenge!')
+    elif client_type == 'openssh':
+        return run_openssh(command, capture_output, payload)
+    elif client_type == 'paramiko':
+        return run_paramiko(command, capture_output, payload)
     else:
-        if not request('/docker').json().get('success'):
-            error('No active challenge session; start a challenge!')
-
-        if client_type == 'openssh':
-            return run_openssh(command, capture_output, payload)
-        elif client_type == 'paramiko':
-            return run_paramiko(command, capture_output, payload)
-        else:
-            error(f'Invalid client type: {client_type}')
+        error(f'Invalid client type: {client_type}')
 
 def download_file(remote_path: Path, local_path: Optional[Path] = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:

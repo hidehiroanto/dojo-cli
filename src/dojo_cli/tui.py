@@ -2,6 +2,8 @@
 Implements the custom Trogon TUI for the pwn.college dojo CLI.
 """
 
+# TODO: rename to trogon_tui.py or something when/if I add more TUIs
+
 import click
 
 from rich.text import Text
@@ -195,6 +197,6 @@ class CustomTrogon(Trogon):
     def get_default_screen(self) -> CustomCommandBuilder:
         return CustomCommandBuilder(self.cli, self.app_name, self.command_name)
 
-def init_tui(app):
+def init_trogon(app):
     tui = CustomTrogon(get_group(app), click_context=click.get_current_context())
     tui.run()
