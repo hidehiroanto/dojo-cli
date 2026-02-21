@@ -1,6 +1,7 @@
 # Dojo CLI
 
-`dojo-cli` is a Python command line interface and package to interact with the pwn.college API and website.
+`dojo-cli` is a Python package to interact with the pwn.college API and website.
+It comes with a command line interface called `dojo`.
 
 ## Images
 
@@ -26,12 +27,12 @@ uv tool install --from git+https://github.com/hidehiroanto/dojo-cli dojo-cli
 
 Then just run `dojo` to start the CLI.
 
-If you want to add the Python package to your project environment, run this:
+If you want to add the Python package and CLI as a dependency to your project, run this:
 ```sh
 uv add git+https://github.com/hidehiroanto/dojo-cli
 ```
 
-If you want to add the Python package globally, run this:
+If you want to add the Python package and CLI to your system environment, run this:
 ```sh
 uv pip install --break-system-packages --strict --system git+https://github.com/hidehiroanto/dojo-cli
 ```
@@ -51,10 +52,10 @@ uv pip install --break-system-packages --strict --system git+https://github.com/
 - Running a remote command on a challenge
 - Finding the largest files in your home directory
 - Downloading files from and uploading files to the remote server
-- Using the Zed code editor to edit files on the remote server
+- Using the text editor of your choice to edit files on the remote server
 - Getting a hint about the flag
-- Submitting flags
 - Talking with SensAI
+- Submitting flags
 - Custom configuration in either JSON or YAML format
 - A TUI to help you navigate all this
 - And more!

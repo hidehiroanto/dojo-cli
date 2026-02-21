@@ -12,6 +12,7 @@ import requests
 import subprocess
 import tarfile
 import tempfile
+import yaml
 
 from .client import get_remote_client
 from .config import load_user_config
@@ -73,7 +74,7 @@ def load_zed_settings() -> tuple[dict, list[str]]:
     if ZED_SETTINGS_PATH.is_file():
         zed_settings_lines = ZED_SETTINGS_PATH.read_text().splitlines()
         comment_list = [line for line in zed_settings_lines if line.startswith('//')]
-        return json.loads(''.join(line for line in zed_settings_lines if not line.startswith('//'))), comment_list
+        return yaml.safe_load(''.join(line for line in zed_settings_lines if not line.startswith('//'))), comment_list
 
     return {}, []
 
