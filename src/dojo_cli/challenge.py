@@ -111,25 +111,25 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
         table_title = 'List of Dojos'
         table_keys = ['id', 'award', 'name', 'description', 'modules', 'challenges']
 
-        for dojo_id in dojos:
-            if not dojo_id['award']:
+        for dojo in dojos:
+            if not dojo['award']:
                 award = None
-            elif 'belt' in dojo_id['award']:
+            elif 'belt' in dojo['award']:
                 if render_image:
-                    award = download_image(f'/belt/{dojo_id['award']['belt']}.svg', 'belt')
+                    award = download_image(f'/belt/{dojo['award']['belt']}.svg', 'belt')
                 else:
-                    belt_hex = get_belt_hex(dojo_id['award']['belt'])
-                    award = f'[bold {belt_hex}]{dojo_id['award']['belt'].title()} Belt[/]'
-            elif 'emoji' in dojo_id['award']:
-                award = dojo_id['award']['emoji']
+                    belt_hex = get_belt_hex(dojo['award']['belt'])
+                    award = f'[bold {belt_hex}]{dojo['award']['belt'].title()} Belt[/]'
+            elif 'emoji' in dojo['award']:
+                award = dojo['award']['emoji']
 
             table_data.append({
-                'id': f'[bold cyan]{dojo_id['id']}[/]',
+                'id': f'[bold cyan]{dojo['id']}[/]',
                 'award': award,
-                'name': f'[bold green]{dojo_id['name']}[/]',
-                'description': Markdown(dojo_id['description']) if dojo_id['description'] else None,
-                'modules': dojo_id['modules_count'],
-                'challenges': dojo_id['challenges_count']
+                'name': f'[bold green]{dojo['name']}[/]',
+                'description': Markdown(dojo['description']) if dojo['description'] else None,
+                'modules': dojo['modules_count'],
+                'challenges': dojo['challenges_count']
             })
     elif not module_id:
         modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
@@ -137,11 +137,11 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
         table_title = f'List of Modules in {dojo_id}'
         table_keys = ['id', 'name', 'description']
 
-        for module_id in modules:
+        for module in modules:
             table_data.append({
-                'id': f'[bold cyan]{module_id['id']}[/]',
-                'name': f'[bold green]{module_id['name']}[/]',
-                'description': Markdown(module_id['description']) if module_id['description'] else None
+                'id': f'[bold cyan]{module['id']}[/]',
+                'name': f'[bold green]{module['name']}[/]',
+                'description': Markdown(module['description']) if module['description'] else None
             })
     elif not challenge_id:
         modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
@@ -155,19 +155,19 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
             for resource in resources:
                 resource['id'] = f'[bold cyan]{resource['id']}[/]'
                 resource['name'] = f'[bold green]{resource['name']}[/]'
+
                 if resource['type'] == 'lecture':
                     resource['content'] = ''
-                    if 'video' in resource:
+                    if resource.get('video'):
                         youtube_url = f'https://www.youtube.com/watch?v={resource['video']}'
-                        if 'playlist' in resource:
+                        if resource.get('playlist'):
                             youtube_url += f'&list={resource['playlist']}'
-                        resource['content'] += f'Video: [blue link={youtube_url}]{youtube_url}[/]\n'
-                    if 'slides' in resource:
+                        resource['content'] += f'Video: [{youtube_url}]({youtube_url})\n\n'
+                    if resource.get('slides'):
                         slides_url = f'https://docs.google.com/presentation/d/{resource['slides']}/embed'
-                        resource['content'] += f'Slides: [blue link={slides_url}]{slides_url}[/]\n'
-                    resource['content'] = resource['content'].strip()
-                if resource['type'] == 'markdown':
-                    resource['content'] = Markdown(resource['content'])
+                        resource['content'] += f'Slides: [{slides_url}]({slides_url})\n\n'
+
+                resource['content'] = Markdown(resource['content'])
                 resource['type'] = resource['type'].title()
             show_table(resources, resource_title, resource_keys, show_lines=True)
 
@@ -175,11 +175,11 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
         table_title = f'List of Challenges in {dojo_id}/{module_id}'
         table_keys = ['id', 'name', 'description']
 
-        for challenge_id in module['challenges']:
+        for challenge in module['challenges']:
             table_data.append({
-                'id': f'[bold cyan]{challenge_id['id']}[/]',
-                'name': f'[bold green]{challenge_id['name']}[/]',
-                'description': Markdown(challenge_id['description']) if challenge_id['description'] else None
+                'id': f'[bold cyan]{challenge['id']}[/]',
+                'name': f'[bold green]{challenge['name']}[/]',
+                'description': Markdown(challenge['description']) if challenge['description'] else None
             })
     else:
         modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')

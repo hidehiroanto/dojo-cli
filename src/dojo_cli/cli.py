@@ -21,6 +21,7 @@ from .remote import bat_file, download_file, edit_path, print_file, run_cmd, ssh
 from .sensai import init_sensai
 from .shell import init_bash, init_fish, init_nu, init_zsh
 from .terminal import apply_style
+from .tree import init_tree
 from .tui import init_trogon
 from .user import do_login, do_logout, show_belts, show_me, show_score, show_scoreboard
 from .zed import init_zed
@@ -114,16 +115,16 @@ def ls(
 
     show_list(dojo_id, module_id, challenge_id, official, simple)
 
-# @app.command(rich_help_panel='Challenge Info')
+@app.command(rich_help_panel='Challenge Info')
 def tree(
     dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
     module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
-    challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None
+    challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None,
+    official: Annotated[bool, Option('-o', '--official', help='Filter to official dojos')] = False
 ):
-    """Display the children of a dojo or module in a tree. If no dojo is given, display a tree of all dojos."""
+    """Display a tree of the members of a dojo or module in a TUI. If no dojo is given, display a tree of all dojos."""
 
-    # TODO: Implement tree mode
-    # TODO: Implement TUI?
+    init_tree(dojo_id, module_id, challenge_id, official)
 
 @app.command(short_help='Start a new challenge.', rich_help_panel='Challenge Launch')
 def start(
@@ -526,9 +527,18 @@ def hint(
 
     show_hint(dojo_id, module_id, challenge_id)
 
-@app.command(rich_help_panel='Challenge Help')
+@app.command(short_help='Communicate with the pwn.college SensAI assistant.', rich_help_panel='Challenge Help')
 def sensai():
-    """Communicate with the pwn.college SensAI assistant."""
+    """
+    Communicate with the pwn.college SensAI assistant. Its Markdown replies will be rendered appropriately.
+
+    Instructions:
+    Type [bold yellow]!<command>[/] to execute a remote command and add its output to the terminal context.
+    Type [bold magenta]@path/to/file[/] to add a local file to the file context.
+    Type [bold magenta]@{ssh_host}:path/to/file[/] to add a remote file to the file context.
+    End every message with a single line containing only [bold cyan]END MESSAGE[/].
+    Press [bold cyan]^C[/] to exit SensAI.
+    """
 
     init_sensai()
 

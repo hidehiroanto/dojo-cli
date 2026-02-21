@@ -2,6 +2,8 @@
 Handles SensAI.
 """
 
+# TODO: make this a TUI, get inspired by Toad
+
 from pathlib import Path
 import os
 import re
@@ -42,9 +44,9 @@ def init_sensai():
     with SimpleClient() as sio_client, get_remote_client() as remote_client:
         sio_client.connect(base_url, headers, transports=['websocket'], socketio_path='sensai/socket.io')
 
-        info('Type [bold yellow]! <command>[/] to execute a remote command and add its output to the terminal context.')
-        info('Type [bold magenta]@/absolute/path/to/local/file[/] to add a local file to the file context.')
-        info(f'Type [bold magenta]@{ssh_host}:/absolute/path/to/remote/file[/] to add a remote file to the file context.')
+        info('Type [bold yellow]!<command>[/] to execute a remote command and add its output to the terminal context.')
+        info('Type [bold magenta]@path/to/file[/] to add a local file to the file context.')
+        info(f'Type [bold magenta]@{ssh_host}:path/to/file[/] to add a remote file to the file context.')
         info('End every message with a single line containing only [bold cyan]END MESSAGE[/].')
         info('Press [bold cyan]^C[/] to exit SensAI.')
 
@@ -54,8 +56,8 @@ def init_sensai():
 
             user_input = input()
             while user_input != 'END MESSAGE':
-                if user_input.startswith('! '):
-                    command_input = user_input[2:]
+                if user_input.startswith('!'):
+                    command_input = user_input[1:]
                     command_output = run_cmd(command_input, capture_output=True)
                     if command_output is not None:
                         try:

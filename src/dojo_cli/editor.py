@@ -96,8 +96,7 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
         info('Unmounting the filesystem...')
 
     elif mode == 'sshfs':
-        sshfs = Path(which('sshfs') or USR_LOCAL_BIN_DIR / 'sshfs')
-        if not sshfs.is_file():
+        if not Path(which('sshfs') or USR_LOCAL_BIN_DIR / 'sshfs').is_file():
             if UNAME_SYSTEM == 'Darwin':
                 # maybe use macfuse + sshfs when macfuse 5.2 comes out without kext
                 info('Installing fuse-t-sshfs...')
@@ -128,6 +127,7 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
             else:
                 error('Your OS is not yet supported.')
 
+        sshfs = Path(which('sshfs') or USR_LOCAL_BIN_DIR / 'sshfs')
         if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
             subprocess.run([sshfs, '-F', ssh_config_file, f'{ssh_config['Host']}:{project_path}', mount_point])
         elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):

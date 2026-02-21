@@ -44,6 +44,7 @@ def homebrew_install(
     if not brew.is_file():
         info('Installing Homebrew...')
         subprocess.run(['bash', '-c', requests.get(HOMEBREW_INSTALL_URL).text])
+        brew = Path(which('brew') or HOMEBREW_PREFIX / 'bin' / 'brew')
     elif not skip_update:
         subprocess.run([brew, 'update'])
 
@@ -75,6 +76,7 @@ def scoop_install(
         info('Installing scoop...')
         subprocess.run(['Set-ExecutionPolicy', '-ExecutionPolicy', 'RemoteSigned', '-Scope', 'CurrentUser'])
         subprocess.run(requests.get(SCOOP_INSTALL_URL).text, shell=True)
+        scoop = Path(which('scoop') or 'scoop')
     elif not skip_update:
         # TODO: Update scoop
         pass
@@ -101,6 +103,7 @@ def uv_install(
     if not uv.is_file():
         info('Installing uv...')
         subprocess.run(requests.get(UV_INSTALL_URL).text, shell=True)
+        uv = Path(which('uv') or XDG_BIN_HOME / 'uv')
     elif not skip_update:
         subprocess.run([uv, 'self', 'update'])
 
@@ -132,11 +135,13 @@ def wax_install(
     if not cargo.is_file():
         info('Installing Rust...')
         subprocess.run(requests.get(RUSTUP_INSTALL_URL).text, shell=True)
+        cargo = Path(which('cargo') or CARGO_HOME / 'bin' / 'cargo')
 
     wax = Path(which('wax') or CARGO_HOME / 'bin' / 'wax')
     if not wax.is_file():
         info('Installing Wax...')
         subprocess.run([cargo, 'install', 'waxpkg'])
+        wax = Path(which('wax') or CARGO_HOME / 'bin' / 'wax')
     elif not skip_update:
         subprocess.run([wax, 'update', '-s'])
 
@@ -165,6 +170,7 @@ def zerobrew_install(
     if not zb.is_file() or not skip_update:
         info('Installing Zerobrew...')
         subprocess.run(requests.get(ZEROBREW_INSTALL_URL).text, shell=True)
+        zb = Path(which('zb') or XDG_BIN_HOME / 'zb')
 
     if taps:
         # TODO: replace this when zerobrew supports taps
