@@ -7,6 +7,7 @@ It comes with a command line interface called `dojo`.
 
 ![dojo](https://github.com/hidehiroanto/dojo-cli/blob/main/images/help-black.png)
 ![trogon](https://github.com/hidehiroanto/dojo-cli/blob/main/images/trogon-tokyo-night.png)
+![tree](https://github.com/hidehiroanto/dojo-cli/blob/main/images/tree-catppuccin-mocha.png)
 ![fastfetch](https://github.com/hidehiroanto/dojo-cli/blob/main/images/nu-fastfetch.png)
 
 ## Quickstart
@@ -46,6 +47,7 @@ uv pip install --break-system-packages --strict --system git+https://github.com/
 - Getting rankings in dojos and modules (now with images!)
 - Getting information about belted users
 - Listing the names and descriptions of dojos, modules, and challenges
+- An interactive tree view to read challenge descriptions and start challenges
 - Starting, restarting, and stopping a challenge
 - Checking the status of a challenge
 - Connecting to a challenge with SSH

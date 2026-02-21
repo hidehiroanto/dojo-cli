@@ -108,23 +108,25 @@ def ls(
     dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
     module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
     challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None,
+    auth: Annotated[bool, Option('-a', '--auth', help='Authenticate to display hidden dojos')] = False,
     official: Annotated[bool, Option('-o', '--official', help='Filter to official dojos')] = False,
     simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
 ):
     """List the members of a dojo or module. If no dojo is given, display all dojos."""
 
-    show_list(dojo_id, module_id, challenge_id, official, simple)
+    show_list(dojo_id, module_id, challenge_id, auth, official, simple)
 
 @app.command(rich_help_panel='Challenge Info')
 def tree(
     dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
     module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
     challenge_id: Annotated[Optional[str], Option('-c', '--challenge', help='Challenge ID')] = None,
+    auth: Annotated[bool, Option('-a', '--auth', help='Authenticate to display hidden dojos')] = False,
     official: Annotated[bool, Option('-o', '--official', help='Filter to official dojos')] = False
 ):
     """Display a tree of the members of a dojo or module in a TUI. If no dojo is given, display a tree of all dojos."""
 
-    init_tree(dojo_id, module_id, challenge_id, official)
+    init_tree(dojo_id, module_id, challenge_id, auth, official)
 
 @app.command(short_help='Start a new challenge.', rich_help_panel='Challenge Launch')
 def start(
@@ -534,8 +536,7 @@ def sensai():
 
     Instructions:
     Type [bold yellow]!<command>[/] to execute a remote command and add its output to the terminal context.
-    Type [bold magenta]@path/to/file[/] to add a local file to the file context.
-    Type [bold magenta]@{ssh_host}:path/to/file[/] to add a remote file to the file context.
+    Type [bold magenta]@path/to/file[/] to add the contents of a file to the file context.
     End every message with a single line containing only [bold cyan]END MESSAGE[/].
     Press [bold cyan]^C[/] to exit SensAI.
     """

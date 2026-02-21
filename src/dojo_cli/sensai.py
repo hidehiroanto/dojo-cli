@@ -25,7 +25,6 @@ def init_sensai():
     user_config = load_user_config()
     base_url = user_config['base_url']
     cookie_path = Path(user_config['cookie_path']).expanduser().resolve()
-    ssh_host = user_config['ssh']['Host']
 
     if not cookie_path.is_file():
         error('Please login first.')
@@ -45,8 +44,7 @@ def init_sensai():
         sio_client.connect(base_url, headers, transports=['websocket'], socketio_path='sensai/socket.io')
 
         info('Type [bold yellow]!<command>[/] to execute a remote command and add its output to the terminal context.')
-        info('Type [bold magenta]@path/to/file[/] to add a local file to the file context.')
-        info(f'Type [bold magenta]@{ssh_host}:path/to/file[/] to add a remote file to the file context.')
+        info('Type [bold magenta]@path/to/file[/] to add the contents of a file to the file context.')
         info('End every message with a single line containing only [bold cyan]END MESSAGE[/].')
         info('Press [bold cyan]^C[/] to exit SensAI.')
 
@@ -77,30 +75,25 @@ def init_sensai():
 
             filenames = re.findall(r'@(\S+)', user_message)
             for filename in filenames:
-                if filename.startswith(f'{ssh_host}:'):
-                    remote_filename = filename[len(f'{ssh_host}:'):]
-                    if remote_client.is_file(remote_filename):
+                if remote_client.is_file(filename):
+                    try:
+                        file_content = remote_client.read_bytes(filename)
+                        file_context += f'BEGIN {filename}\n{file_content.decode()}\nEND {filename}\n'
+                    except UnicodeDecodeError:
+                        file_context += f'BEGIN {filename}\n{file_content}\nEND {filename}\n'
+                    except PermissionError:
+                        file_context += f'Permission denied: {filename}'
+                elif Path(filename).expanduser().is_file():
+                    if os.access(filename, os.R_OK):
+                        file_content = Path(filename).read_bytes()
                         try:
-                            file_content = remote_client.read_bytes(remote_filename)
                             file_context += f'BEGIN {filename}\n{file_content.decode()}\nEND {filename}\n'
                         except UnicodeDecodeError:
                             file_context += f'BEGIN {filename}\n{file_content}\nEND {filename}\n'
-                        except PermissionError:
-                            file_context += f'Permission denied: {filename}'
                     else:
-                        file_context += f'File not found: {filename}'
+                        file_context += f'Permission denied: {filename}'
                 else:
-                    if Path(filename).is_file():
-                        if os.access(filename, os.R_OK):
-                            file_content = Path(filename).read_bytes()
-                            try:
-                                file_context += f'BEGIN {filename}\n{file_content.decode()}\nEND {filename}\n'
-                            except UnicodeDecodeError:
-                                file_context += f'BEGIN {filename}\n{file_content}\nEND {filename}\n'
-                        else:
-                            file_context += f'Permission denied: {filename}'
-                    else:
-                        file_context += f'File not found: {filename}'
+                    file_context += f'File not found: {filename}'
 
             content = {'message': user_message, 'terminal': terminal_context, 'file': file_context}
             sio_client.emit('new_interaction', {'type': 'learner', 'content': content})

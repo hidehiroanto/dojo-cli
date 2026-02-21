@@ -5,6 +5,7 @@ Utility functions for the pwn.college dojo CLI.
 from cairosvg import svg2png
 from io import BytesIO
 import os
+import re
 from rich import box, print as rprint
 from rich.table import Column, Table
 from rich.text import Text
@@ -16,6 +17,9 @@ from .terminal import apply_style
 
 if os.getenv('TERM_PROGRAM') not in ['Apple_Terminal']:
     from textual_image.renderable import Image, SixelImage, TGPImage
+
+def fix_markdown_links(markdown: str) -> str:
+    return re.sub(r'\[([^\]]+)\]\((\/[^\)]+)\)', fr'[\1]({load_user_config()['base_url']}\2)', markdown)
 
 def get_box(s: str) -> Optional[box.Box]:
     if hasattr(box, s) and isinstance(getattr(box, s), box.Box):

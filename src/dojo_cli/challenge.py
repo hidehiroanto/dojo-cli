@@ -16,7 +16,30 @@ from .http import request
 from .log import error, fail, info, success, warn
 from .remote import run_cmd
 from .terminal import apply_style
-from .utils import can_render_image, download_image, get_belt_hex, show_table
+from .utils import can_render_image, download_image, fix_markdown_links, get_belt_hex, show_table
+
+DOJO_IDS = [
+    'welcome',
+    'linux-luminarium',
+    'computing-101',
+    'fundamentals',
+    'intro-to-cybersecurity',
+    'program-security',
+    'system-security',
+    'software-exploitation',
+    'archive',
+    'acsac-ctfs',
+    'advent-of-pwn',
+    'arm-architecture',
+    'cryptomania',
+    'ctf-archive',
+    'demo-dojo',
+    'intro-to-programming-languages',
+    'shell-lin-do',
+    'quarterly-quiz',
+    'windows-warzone',
+    'xnu'
+]
 
 def parse_challenge_path(challenge_id: str, chal_data: dict = {}) -> tuple:
     if re.fullmatch(r'[\-\w]+', challenge_id):
@@ -100,18 +123,20 @@ def get_flag_size() -> int:
 
     return -1
 
-def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None, official: bool = False, simple: bool = False):
+def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None, auth: bool = False, official: bool = False, simple: bool = False):
     if not dojo_id:
-        dojos = request('/dojos', auth=False).json().get('dojos')
+        dojos = request('/dojos', auth=auth).json().get('dojos')
+        sorted_dojos = sorted(filter(lambda dojo: dojo['id'] in DOJO_IDS, dojos), key=lambda dojo: DOJO_IDS.index(dojo['id']))
+        sorted_dojos += sorted(filter(lambda dojo: dojo['id'] not in DOJO_IDS, dojos), key=lambda dojo: dojo['id'])
         if official:
-            dojos = filter(lambda dojo: dojo['official'], dojos)
-        # TODO: sort dojos
+            sorted_dojos = filter(lambda dojo: dojo['official'], sorted_dojos)
+
         render_image = not simple and can_render_image()
         table_data = []
         table_title = 'List of Dojos'
         table_keys = ['id', 'award', 'name', 'description', 'modules', 'challenges']
 
-        for dojo in dojos:
+        for dojo in sorted_dojos:
             if not dojo['award']:
                 award = None
             elif 'belt' in dojo['award']:
@@ -127,12 +152,13 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
                 'id': f'[bold cyan]{dojo['id']}[/]',
                 'award': award,
                 'name': f'[bold green]{dojo['name']}[/]',
-                'description': Markdown(dojo['description']) if dojo['description'] else None,
+                'description': Markdown(fix_markdown_links(dojo['description'])) if dojo['description'] else None,
                 'modules': dojo['modules_count'],
                 'challenges': dojo['challenges_count']
             })
+
     elif not module_id:
-        modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
+        modules = request(f'/dojos/{dojo_id}/modules', auth=auth).json().get('modules')
         table_data = []
         table_title = f'List of Modules in {dojo_id}'
         table_keys = ['id', 'name', 'description']
@@ -141,10 +167,11 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
             table_data.append({
                 'id': f'[bold cyan]{module['id']}[/]',
                 'name': f'[bold green]{module['name']}[/]',
-                'description': Markdown(module['description']) if module['description'] else None
+                'description': Markdown(fix_markdown_links(module['description'])) if module['description'] else None
             })
+
     elif not challenge_id:
-        modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
+        modules = request(f'/dojos/{dojo_id}/modules', auth=auth).json().get('modules')
         module = next(filter(lambda module: module['id'] == module_id, modules))
         resources = list(filter(lambda resource: resource['type'] != 'header', module['resources']))
 
@@ -167,7 +194,7 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
                         slides_url = f'https://docs.google.com/presentation/d/{resource['slides']}/embed'
                         resource['content'] += f'Slides: [{slides_url}]({slides_url})\n\n'
 
-                resource['content'] = Markdown(resource['content'])
+                resource['content'] = Markdown(fix_markdown_links(resource['content'])) if resource['content'] else None
                 resource['type'] = resource['type'].title()
             show_table(resources, resource_title, resource_keys, show_lines=True)
 
@@ -179,10 +206,10 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
             table_data.append({
                 'id': f'[bold cyan]{challenge['id']}[/]',
                 'name': f'[bold green]{challenge['name']}[/]',
-                'description': Markdown(challenge['description']) if challenge['description'] else None
+                'description': Markdown(fix_markdown_links(challenge['description'])) if challenge['description'] else None
             })
     else:
-        modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
+        modules = request(f'/dojos/{dojo_id}/modules', auth=auth).json().get('modules')
         challenges = next(filter(lambda module: module['id'] == module_id, modules)).get('challenges')
         table_data = next(filter(lambda challenge: challenge['id'] == challenge_id, challenges))
         table_title = f'Challenge Info for {dojo_id}/{module_id}/{challenge_id}'
@@ -190,7 +217,7 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
 
         table_data['id'] = f'[bold cyan]{table_data['id']}[/]'
         table_data['name'] = f'[bold green]{table_data['name']}[/]'
-        table_data['description'] = Markdown(table_data['description']) if table_data['description'] else None
+        table_data['description'] = Markdown(fix_markdown_links(table_data['description'])) if table_data['description'] else None
 
     show_table(table_data, table_title, table_keys, show_lines=True)
 
