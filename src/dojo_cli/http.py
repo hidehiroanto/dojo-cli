@@ -52,7 +52,7 @@ def deserialize_auth_token(auth_token: str) -> Optional[list[int | str]]:
 def request(url: str, api: bool = True, auth: bool = True, csrf: bool = False, **kwargs):
     user_config = load_user_config()
     session = kwargs.pop('session', Session())
-    method = 'POST' if 'data' in kwargs or 'json' in kwargs else 'GET'
+    method = kwargs.pop('method', 'POST' if 'data' in kwargs or 'json' in kwargs else 'GET')
     base_url = user_config['base_url']
     headers = kwargs.pop('headers', {})
 

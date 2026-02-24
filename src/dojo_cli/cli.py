@@ -23,7 +23,7 @@ from .shell import init_bash, init_fish, init_nu, init_zsh
 from .terminal import apply_style
 from .tree import init_tree
 from .tui import init_trogon
-from .user import do_login, do_logout, show_belts, show_me, show_score, show_scoreboard
+from .user import change_settings, do_login, do_logout, do_register, show_belts, show_me, show_score, show_scoreboard
 from .zed import init_zed
 
 app = Typer(
@@ -40,6 +40,16 @@ app = Typer(
 )
 
 @app.command(rich_help_panel='User Login and Settings')
+def register(
+    username: Annotated[Optional[str], Option('-u', '--username', help='Username')] = None,
+    email: Annotated[Optional[str], Option('-e', '--email', help='Email')] = None,
+    password: Annotated[Optional[str], Option('-p', '--password', help='Password')] = None
+):
+    """Register for a new pwn.college account and save session cookie to the cache."""
+
+    do_register(username, email, password)
+
+@app.command(rich_help_panel='User Login and Settings')
 def login(
     username: Annotated[Optional[str], Option('-u', '--username', help='Username or email')] = None,
     password: Annotated[Optional[str], Option('-p', '--password', help='Password')] = None
@@ -54,7 +64,12 @@ def logout():
 
     do_logout()
 
-# TODO: Add change settings command
+@app.command(rich_help_panel='User Login and Settings')
+def settings():
+    """Change the settings of your pwn.college account."""
+
+    change_settings()
+
 # TODO: Add standalone add ssh key command
 
 @app.command(rich_help_panel='User Login and Settings')

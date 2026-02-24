@@ -5,6 +5,7 @@ Handles user login and data.
 from bs4 import BeautifulSoup
 from datetime import datetime
 from getpass import getpass
+import re
 from requests import Session
 from typing import Optional
 
@@ -12,6 +13,26 @@ from .config import load_user_config
 from .http import delete_cookie, request, save_cookie
 from .log import error, fail, info, success
 from .utils import can_render_image, download_image, get_belt_hex, show_table
+
+def do_register(username: Optional[str] = None, email: Optional[str] = None, password: Optional[str] = None):
+    while not username:
+        username = input('Enter username: ')
+    while not email:
+        email = input('Enter email: ')
+    while not password:
+        password = getpass('Enter password: ', echo_char=load_user_config()['password_echo_char'])
+
+    with Session() as session:
+        credentials = {'name': username, 'email': email, 'password': password, 'commitment_verified': 'verified'}
+        response = request('/register', False, False, True, session=session, data=credentials)
+        errors = re.findall(r'<div class=".*" role="alert">\s+<span>(.*)</span>', response.text)
+
+        if errors:
+            for error_msg in errors:
+                fail(error_msg)
+        else:
+            save_cookie({'session': session.cookies.get('session')})
+            success(f'Logged in as user [bold green]{username}[/]!')
 
 def do_login(username: Optional[str] = None, password: Optional[str] = None):
     while not username:
@@ -22,9 +43,11 @@ def do_login(username: Optional[str] = None, password: Optional[str] = None):
     with Session() as session:
         credentials = {'name': username, 'password': password}
         response = request('/login', False, False, True, session=session, data=credentials)
+        errors = re.findall(r'<div class=".*" role="alert">\s+<span>(.*)</span>', response.text)
 
-        if 'Your username or password is incorrect' in response.text:
-            fail('Login failed.')
+        if errors:
+            for error_msg in errors:
+                fail(error_msg)
         else:
             save_cookie({'session': session.cookies.get('session')})
             success(f'Logged in as user [bold green]{username}[/]!')
@@ -32,6 +55,32 @@ def do_login(username: Optional[str] = None, password: Optional[str] = None):
 def do_logout():
     delete_cookie()
     success('You have logged out.')
+
+def change_settings():
+    settings = request('/settings', False).text
+    matches = re.findall(r'<input class="form[^"]*" id="(\w+)" name="\w+" (type="\w+")? value="([^"]*)">', settings)
+    old_data = [match for match in matches if match[0] not in {'confirm', 'expiration'}]
+    new_data = {}
+    for key, value in old_data:
+        if key != 'password':
+            info(f'Old {key}: {value}')
+        info(f'Change {key}?')
+        if input('(y/N) > ').strip()[:1].lower() == 'y':
+            if key == 'password':
+                new_data['confirm'] = getpass('Confirm old password: ', echo_char=load_user_config()['password_echo_char'])
+                new_data['password'] = getpass('Enter new password: ', echo_char=load_user_config()['password_echo_char'])
+            else:
+                info(f'Enter new {key}:')
+                new_data[key] = input()
+
+    response = request('/api/v1/users/me', False, method='PATCH', data=new_data).json()
+    if response.get('success'):
+        success('Success! Your profile has been updated.')
+    elif response.get('errors', {}):
+        if response['errors'].get('confirm'):
+            error(response['errors']['confirm'])
+        else:
+            error(str(response['errors']))
 
 def get_rank(num):
     rank_style = load_user_config()['object_styles']['rank']

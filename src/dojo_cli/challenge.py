@@ -246,8 +246,8 @@ def init_challenge(dojo_id: Optional[str] = None, module_id: Optional[str] = Non
     else:
         practice = chal_data.get('practice', False)
 
-    challenge_data = {'dojo': dojo_id, 'module': module_id, 'challenge': challenge_id, 'practice': practice}
-    docker_response = request('/docker', csrf=True, json=challenge_data).json()
+    chal_data = {'dojo': dojo_id, 'module': module_id, 'challenge': challenge_id, 'practice': practice}
+    docker_response = request('/docker', csrf=True, json=chal_data).json()
     if docker_response.get('success'):
         success('Challenge started successfully!')
     elif docker_response.get('error'):

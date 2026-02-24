@@ -60,8 +60,6 @@ SLASH_COMMANDS = {
 }
 
 class SensaiApp(App):
-    MAX_OPTIONS = 20
-
     CSS = """
     VerticalScroll {
         margin: 1;
@@ -80,6 +78,9 @@ class SensaiApp(App):
         height: 10;
     }
     """
+
+    MAX_OPTIONS = 20
+    HEIGHT_DIFF_THRESHOLD = 6
 
     def __init__(self, base_url: str, session_cookie: str):
         super().__init__()
@@ -241,7 +242,7 @@ class SensaiApp(App):
                 self.query_one(Button).disabled = True
                 input_box.disabled = True
                 input_box.placeholder = 'Waiting...'
-                if vertical_scroll.virtual_size.height - vertical_scroll.scrollable_size.height > 6:
+                if vertical_scroll.virtual_size.height - vertical_scroll.scrollable_size.height > self.HEIGHT_DIFF_THRESHOLD:
                     vertical_scroll.scroll_end(on_complete=self.run_shell_cmd)
                 else:
                     self.call_after_refresh(self.run_shell_cmd)
@@ -251,7 +252,7 @@ class SensaiApp(App):
                 self.query_one(Button).disabled = True
                 input_box.disabled = True
                 input_box.placeholder = 'Waiting...'
-                if vertical_scroll.virtual_size.height - vertical_scroll.scrollable_size.height > 5:
+                if vertical_scroll.virtual_size.height - vertical_scroll.scrollable_size.height > self.HEIGHT_DIFF_THRESHOLD:
                     vertical_scroll.scroll_end(on_complete=self.emit_and_receive_event)
                 else:
                     self.call_after_refresh(self.emit_and_receive_event)
