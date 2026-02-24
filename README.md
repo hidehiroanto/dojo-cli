@@ -8,6 +8,7 @@ It comes with a command line interface called `dojo`.
 ![dojo](https://github.com/hidehiroanto/dojo-cli/blob/main/images/help-black.png)
 ![trogon](https://github.com/hidehiroanto/dojo-cli/blob/main/images/trogon-tokyo-night.png)
 ![tree](https://github.com/hidehiroanto/dojo-cli/blob/main/images/tree-catppuccin-mocha.png)
+![sensai](https://github.com/hidehiroanto/dojo-cli/blob/main/images/sensai-gruvbox.png)
 ![fastfetch](https://github.com/hidehiroanto/dojo-cli/blob/main/images/nu-fastfetch.png)
 
 ## Quickstart

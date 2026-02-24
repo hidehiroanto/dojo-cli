@@ -529,19 +529,11 @@ def hint(
 
     show_hint(dojo_id, module_id, challenge_id)
 
-@app.command(short_help='Communicate with the pwn.college SensAI assistant.', rich_help_panel='Challenge Help')
-def sensai():
-    """
-    Communicate with the pwn.college SensAI assistant. Its Markdown replies will be rendered appropriately.
+@app.command(rich_help_panel='Challenge Help')
+def sensai(simple: Annotated[bool, Option('-s', '--simple', help='Disable TUI')] = False):
+    """Communicate with the pwn.college SensAI assistant."""
 
-    Instructions:
-    Type [bold yellow]!<command>[/] to execute a remote command and add its output to the terminal context.
-    Type [bold magenta]@path/to/file[/] to add the contents of a file to the file context.
-    End every message with a single line containing only [bold cyan]END MESSAGE[/].
-    Press [bold cyan]^C[/] to exit SensAI.
-    """
-
-    init_sensai()
+    init_sensai(simple)
 
 @app.command('submit', help='An alias for [bold cyan]solve[/].', rich_help_panel='Flag Submission')
 @app.command(short_help='Submit a flag for a challenge.', rich_help_panel='Flag Submission')

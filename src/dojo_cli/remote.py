@@ -152,7 +152,12 @@ def edit_path(editor: str, path: Optional[Path] = None):
 
         run_cmd(shlex.join([editor, str(path)]) if path else editor)
 
-def run_openssh(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None) -> Optional[bytes]:
+def run_openssh(
+    command: Optional[str] = None,
+    capture_output: bool = False,
+    payload: Optional[bytes] = None,
+    pty: bool = True
+) -> Optional[bytes]:
     ssh = Path(which('ssh') or '/usr/bin/ssh')
     if not ssh.is_file():
         error('Please install OpenSSH first.')
@@ -160,12 +165,13 @@ def run_openssh(command: Optional[str] = None, capture_output: bool = False, pay
     ssh_config = load_user_config()['ssh']
     ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
+    pty_option = '-t' if pty else '-T'
 
     if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
-        ssh_argv = [ssh, '-F', ssh_config_file, '-t', ssh_config['Host']]
+        ssh_argv = [ssh, pty_option, '-F', ssh_config_file, ssh_config['Host']]
     elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
         ssh_argv = [
-            ssh, '-i', ssh_identity_file, '-t',
+            ssh, pty_option, '-i', ssh_identity_file,
             '-o', f'ServerAliveCountMax={ssh_config['ServerAliveCountMax']}',
             '-o', f'ServerAliveInterval={ssh_config['ServerAliveInterval']}',
             f'{ssh_config['User']}@{ssh_config['HostName']}:{ssh_config['Port']}'
@@ -180,20 +186,27 @@ def run_openssh(command: Optional[str] = None, capture_output: bool = False, pay
     if capture_output:
         return completed_process.stdout
 
-def run_paramiko(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None) -> Optional[bytes]:
+def run_paramiko(
+    command: Optional[str] = None,
+    capture_output: bool = False,
+    payload: Optional[bytes] = None,
+    pty: bool = True
+) -> Optional[bytes]:
     with get_remote_client().get_channel() as channel:
-        try:
-            channel.get_pty(DEFAULT_TERM, *os.get_terminal_size())
-        except OSError:
-            channel.get_pty(DEFAULT_TERM, *DEFAULT_PTY_SIZE)
-
-        def resize_pty(signum, frame):
+        if pty:
             try:
-                channel.resize_pty(*os.get_terminal_size())
+                channel.get_pty(DEFAULT_TERM, *os.get_terminal_size())
             except OSError:
-                pass
+                channel.get_pty(DEFAULT_TERM, *DEFAULT_PTY_SIZE)
 
-        signal.signal(signal.SIGWINCH, resize_pty)
+            def resize_pty(signum, frame):
+                try:
+                    channel.resize_pty(*os.get_terminal_size())
+                except OSError:
+                    pass
+
+            signal.signal(signal.SIGWINCH, resize_pty)
+
         output = b''
 
         if command:
@@ -247,7 +260,13 @@ def run_paramiko(command: Optional[str] = None, capture_output: bool = False, pa
         if capture_output:
             return output
 
-def run_cmd(command: Optional[str] = None, capture_output: bool = False, payload: Optional[bytes] = None, client_type: str = 'paramiko') -> Optional[bytes]:
+def run_cmd(
+    command: Optional[str] = None,
+    capture_output: bool = False,
+    payload: Optional[bytes] = None,
+    pty: bool = True,
+    client_type: str = 'paramiko'
+) -> Optional[bytes]:
     """Run a command on the remote server. If capture_output is True, the standard out bytes are returned."""
 
     if client_type == 'local' or 'DOJO_AUTH_TOKEN' in os.environ:
@@ -257,9 +276,9 @@ def run_cmd(command: Optional[str] = None, capture_output: bool = False, payload
     elif not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
     elif client_type == 'openssh':
-        return run_openssh(command, capture_output, payload)
+        return run_openssh(command, capture_output, payload, pty)
     elif client_type == 'paramiko':
-        return run_paramiko(command, capture_output, payload)
+        return run_paramiko(command, capture_output, payload, pty)
     else:
         error(f'Invalid client type: {client_type}')
 

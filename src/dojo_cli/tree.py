@@ -10,7 +10,7 @@ from textual.widgets import Button, Footer, Label, Markdown, MarkdownViewer, Tre
 from typing import Optional
 
 from .http import request
-from .challenge import DOJO_IDS, init_challenge
+from .challenge import DOJO_IDS
 from .utils import fix_markdown_links
 
 ROOT_LABEL = 'up/down: move, space: toggle, enter: select, ctrl+p: palette, ctrl+q: quit'
@@ -69,12 +69,15 @@ class StartChallengeModal(ModalScreen):
                 yield Button.success('Start Challenge')
 
     def on_button_pressed(self, event: Button.Pressed):
+        chal_data = {'dojo': self.dojo_id, 'module': self.module_id, 'challenge': self.challenge_id, 'practice': self.practice}
         if event.button.variant == 'success':
-            if self.practice:
-                init_challenge(self.dojo_id, self.module_id, self.challenge_id, privileged=True)
+            docker_response = request('/docker', csrf=True, json=chal_data).json()
+            if docker_response.get('success'):
+                self.app.exit()
+            elif docker_response.get('error'):
+                raise Exception(docker_response['error'])
             else:
-                init_challenge(self.dojo_id, self.module_id, self.challenge_id, normal=True)
-            self.app.exit()
+                raise Exception('Failed to start challenge.')
         elif event.button.variant == 'error':
             self.dismiss()
 
@@ -180,16 +183,11 @@ class TreeApp(App):
 
     def on_tree_node_selected(self, event: Tree.NodeSelected):
         node_label = str(event.node.label)
-
-        if node_label == 'Start Challenge':
+        if node_label.startswith('Start Challenge'):
             node_data = event.node.data
             assert node_data
-            self.push_screen(StartChallengeModal(node_data['dojo'], node_data['module'], node_data['challenge'], False))
-
-        elif node_label == 'Start Challenge in Privileged Mode':
-            node_data = event.node.data
-            assert node_data
-            self.push_screen(StartChallengeModal(node_data['dojo'], node_data['module'], node_data['challenge'], True))
+            practice = node_label.endswith('in Privileged Mode')
+            self.push_screen(StartChallengeModal(node_data['dojo'], node_data['module'], node_data['challenge'], practice))
 
 def init_tree(
     dojo_id: Optional[str] = None,
