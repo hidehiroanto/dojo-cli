@@ -177,7 +177,7 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
 
         if resources:
             resource_title = f'List of Resources in {dojo_id}/{module_id}'
-            resource_keys = ['name', 'type', 'content']
+            resource_keys = ['id', 'name', 'type', 'content']
 
             for resource in resources:
                 resource['id'] = f'[bold cyan]{resource['id']}[/]'
