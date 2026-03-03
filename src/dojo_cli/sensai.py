@@ -91,7 +91,6 @@ class SensaiApp(App):
 
         self.command_history = []
         self.command_history_index = 0
-        self.file_query = ''
         self.shell_commands = []
         self.option_cache = {}
 
@@ -212,15 +211,12 @@ class SensaiApp(App):
 
             self.command_history.append(self.user_message)
             self.command_history_index = len(self.command_history)
-            self.file_query = ''
-            self.shell_commands = []
-            self.option_cache = {}
 
             if re.match(r'/\S+', self.user_message):
-                command_argv = shlex.split(self.user_message)
-                command = command_argv[0][1:]
+                command_args = shlex.split(self.user_message)
+                command = command_args[0][1:]
                 if command in SLASH_COMMANDS:
-                    SLASH_COMMANDS[command](self, *command_argv[1:])
+                    SLASH_COMMANDS[command](self, *command_args[1:])
                 else:
                     await vertical_scroll.mount(Markdown(f'**Unknown command:** `{self.user_message}`'))
                 vertical_scroll.scroll_end()
@@ -261,65 +257,72 @@ class SensaiApp(App):
         input_box = self.query_one(Input)
         option_list = self.query_one(OptionList)
         option_list.clear_options()
+        option_list.display = False
+        new_options = []
 
         if input_box.value.startswith('/'):
-            option_list.add_options([f'/{cmd}' for cmd in SLASH_COMMANDS if cmd.startswith(input_box.value[1:])])
-            self.file_query = ''
-            option_list.display = True
-            return
+            for cmd in SLASH_COMMANDS:
+                if cmd.startswith(input_box.value[1:]):
+                    new_options.append(f'/{cmd}')
 
         elif input_box.value.startswith('!'):
             if not self.shell_commands:
-                for path_dir in self.remote_client.ssh.exec_command('echo $PATH')[1].read().decode().split(':'):
-                    self.shell_commands += self.remote_client.listdir(path_dir)
-                self.shell_commands = sorted(set(self.shell_commands))
-            option_list.add_options([f'!{cmd}' for cmd in self.shell_commands if cmd.startswith(input_box.value[1:])])
-            self.file_query = ''
-            option_list.display = True
-            return
+                path_dirs = self.remote_client.ssh.exec_command('echo $PATH')[1].read().decode().split(':')
+                fd_args = ['fd', '-Lapu', '-tx', '.'] + path_dirs
+                command_stdout = self.remote_client.ssh.exec_command(shlex.join(fd_args))[1].read()
+                self.shell_commands = sorted(set(Path(p).name for p in command_stdout.decode().splitlines()))
 
-        for span in list(match.span() for match in re.finditer(r'@\S{3,}', input_box.value)):
-            if span[0] <= input_box.cursor_position <= span[1]:
-                self.file_query = input_box.value[span[0] + 1:span[1]].casefold()
-                break
+            for cmd in self.shell_commands:
+                if cmd.startswith(input_box.value[1:]):
+                    new_options.append(f'!{cmd}')
+
         else:
-            self.file_query = ''
-            option_list.display = False
-            return
+            for span in list(match.span() for match in re.finditer(r'@\S{3,}', input_box.value)):
+                if span[0] <= input_box.cursor_position <= span[1]:
+                    file_query = input_box.value[span[0] + 1:span[1]]
+                    file_query_casefold = file_query.casefold()
+                    break
+            else:
+                return
 
-        if self.file_query not in self.option_cache:
-            fd_argv = ['fd', '-apu', '-t', 'f', '.', '/challenge', '/home', '/tmp']
-            fzf_argv = ['fzf', '-f', self.file_query]
-            head_argv = ['head', '-n', str(self.MAX_OPTIONS)]
-            command = ' | '.join(map(shlex.join, [fd_argv, fzf_argv, head_argv]))
-            self.option_cache[self.file_query] = self.remote_client.ssh.exec_command(command)[1].read().decode().splitlines()
+            if file_query_casefold not in self.option_cache:
+                fd_args = ['fd', '-apu', '-tf', '-E', '/nix', '-E', '/sys', '.', '/']
+                fzf_args = ['fzf', '-f', file_query_casefold]
+                head_args = ['head', '-n', str(self.MAX_OPTIONS)]
+                command = ' | '.join(map(shlex.join, [fd_args, fzf_args, head_args]))
+                command_stdout = self.remote_client.ssh.exec_command(command)[1].read()
+                self.option_cache[file_query_casefold] = command_stdout.decode().splitlines()
 
-        if self.option_cache[self.file_query]:
-            option_list.add_options(self.option_cache[self.file_query])
+            new_options = self.option_cache[file_query_casefold]
+
+        if new_options:
+            option_list.add_options(new_options)
+            option_list.display = True
             option_list.highlighted = 0
-            option_list.display = True
-        else:
-            self.file_query = ''
-            option_list.display = False
 
     def on_input_changed(self, event: Input.Changed):
         self.update_option_list()
 
     def select_option(self):
         input_box = self.query_one(Input)
-        option_list = self.query_one(OptionList)
         input_box.focus()
 
         if input_box.value.startswith('/') or input_box.value.startswith('!'):
             input_box.value = self.user_message
             input_box.action_end()
         else:
-            input_box.cursor_position = input_box.value.index(f'@{self.file_query}')
-            input_box.value = input_box.value.replace(f'@{self.file_query}', f'@{self.user_message}')
-            self.file_query = ''
-            option_list.clear_options()
-            option_list.display = False
-            input_box.action_cursor_right_word()
+            if ' ' in input_box.value[:input_box.cursor_position]:
+                left_index = input_box.value[:input_box.cursor_position].rindex(' ') + 1
+            else:
+                left_index = 0
+
+            if ' ' in input_box.value[left_index:]:
+                right_index = left_index + input_box.value[left_index:].index(' ')
+            else:
+                right_index = len(input_box.value)
+
+            input_box.value = input_box.value[:left_index] + f'@{self.user_message}' + input_box.value[right_index:]
+            input_box.cursor_position = left_index + len(f'@{self.user_message}')
 
     def on_key(self, event: Key):
         input_box = self.query_one(Input)

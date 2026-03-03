@@ -168,9 +168,9 @@ def run_openssh(
     pty_option = '-t' if pty else '-T'
 
     if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
-        ssh_argv = [ssh, pty_option, '-F', ssh_config_file, ssh_config['Host']]
+        ssh_args = [ssh, pty_option, '-F', ssh_config_file, ssh_config['Host']]
     elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
-        ssh_argv = [
+        ssh_args = [
             ssh, pty_option, '-i', ssh_identity_file,
             '-o', f'ServerAliveCountMax={ssh_config['ServerAliveCountMax']}',
             '-o', f'ServerAliveInterval={ssh_config['ServerAliveInterval']}',
@@ -180,9 +180,9 @@ def run_openssh(
         error('Something went wrong with the SSH config file or the SSH key, please make sure at least one is valid.')
 
     if command:
-        ssh_argv.append(command)
+        ssh_args.append(command)
 
-    completed_process = subprocess.run(ssh_argv, capture_output=capture_output, input=payload)
+    completed_process = subprocess.run(ssh_args, capture_output=capture_output, input=payload)
     if capture_output:
         return completed_process.stdout
 

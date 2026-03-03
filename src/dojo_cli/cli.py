@@ -23,7 +23,11 @@ from .shell import init_bash, init_fish, init_nu, init_zsh
 from .terminal import apply_style
 from .tree import init_tree
 from .tui import init_trogon
-from .user import change_settings, do_login, do_logout, do_register, show_belts, show_me, show_score, show_scoreboard
+from .user import (
+    change_settings, do_login, do_logout, do_register,
+    show_activity, show_belts, show_me, show_score, show_scoreboard
+)
+from .video import init_twitch, init_youtube
 from .zed import init_zed
 
 app = Typer(
@@ -95,6 +99,12 @@ def whois(username: Annotated[Optional[str], Option('-u', '--username', help='Us
     show_score(username)
 
 @app.command(rich_help_panel='User Info')
+def activity(user_id: Annotated[Optional[int], Option('-i', '--id', help='User ID')] = None):
+    """Show activity for another user. If no user ID is given, show the current user's activity."""
+
+    show_activity(user_id)
+
+@app.command(rich_help_panel='User Info')
 def scoreboard(
     dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
     module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
@@ -142,6 +152,24 @@ def tree(
     """Display a tree of the members of a dojo or module in a TUI. If no dojo is given, display a tree of all dojos."""
 
     init_tree(dojo_id, module_id, challenge_id, auth, official)
+
+@app.command('ttv', help='An alias for [bold cyan]twitch[/].', rich_help_panel='Video')
+@app.command(rich_help_panel='Video')
+def twitch():
+    """Play the pwn.college live stream on Twitch."""
+
+    init_twitch()
+
+@app.command('yt', help='An alias for [bold cyan]youtube[/].', rich_help_panel='Video')
+@app.command(rich_help_panel='Video')
+def youtube(
+    dojo_id: Annotated[str, Option('-d', '--dojo', help='Dojo ID')],
+    module_id: Annotated[str, Option('-m', '--module', help='Module ID')],
+    resource_id: Annotated[str, Option('-r', '--resource', help='Resource ID')]
+):
+    """Play a lecture on YouTube using a resource ID obtained from [bold cyan]ls[/]."""
+
+    init_youtube(dojo_id, module_id, resource_id)
 
 @app.command(short_help='Start a new challenge.', rich_help_panel='Challenge Launch')
 def start(

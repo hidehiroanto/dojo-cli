@@ -206,7 +206,7 @@ def run_zed():
     if not zed_cli.is_file():
         error('Please upgrade zed to the latest version and ensure its parent directory is in PATH.')
     if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
-        zed_argv = [zed_cli, f'ssh://{ssh_config['Host']}{ssh_config['project_path']}']
+        zed_args = [zed_cli, f'ssh://{ssh_config['Host']}{ssh_config['project_path']}']
     elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
         # TODO: Switch to deep merge
         zed_settings, comment_list = load_zed_settings()
@@ -228,14 +228,14 @@ def run_zed():
             })
             save_zed_settings(zed_settings, comment_list)
 
-        zed_argv = [
+        zed_args = [
             zed_cli,
             f'ssh://{ssh_config['User']}@{ssh_config['HostName']}:{ssh_config['Port']}{ssh_config['project_path']}'
         ]
     else:
         error('Something went wrong with the SSH config file or the SSH key, please make sure at least one is valid.')
 
-    subprocess.run(zed_argv)
+    subprocess.run(zed_args)
 
 def init_zed(install: bool = False, use_lang_servers: bool = False):
     if 'DOJO_AUTH_TOKEN' in os.environ:

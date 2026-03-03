@@ -3,10 +3,13 @@ Handles user login and data.
 """
 
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 from getpass import getpass
 import re
 from requests import Session
+from rich import print as rprint
+from rich.table import Table
+# from termgraph.termgraph import calendar_heatmap
 from typing import Optional
 
 from .config import load_user_config
@@ -32,7 +35,7 @@ def do_register(username: Optional[str] = None, email: Optional[str] = None, pas
                 fail(error_msg)
         else:
             save_cookie({'session': session.cookies.get('session')})
-            success(f'Logged in as user [bold green]{username}[/]!')
+            success(f'Registered and logged in as user [bold green]{username}[/]!')
 
 def do_login(username: Optional[str] = None, password: Optional[str] = None):
     while not username:
@@ -67,8 +70,9 @@ def change_settings():
         info(f'Change {key}?')
         if input('(y/N) > ').strip()[:1].lower() == 'y':
             if key == 'password':
-                new_data['confirm'] = getpass('Confirm old password: ', echo_char=load_user_config()['password_echo_char'])
-                new_data['password'] = getpass('Enter new password: ', echo_char=load_user_config()['password_echo_char'])
+                password_echo_char = load_user_config()['password_echo_char']
+                new_data['confirm'] = getpass('Confirm old password: ', echo_char=password_echo_char)
+                new_data['password'] = getpass('Enter new password: ', echo_char=password_echo_char)
             else:
                 info(f'Enter new {key}:')
                 new_data[key] = input()
@@ -128,6 +132,46 @@ def show_score(username: Optional[str] = None):
         'handle': f'[bold green]{username}[/]',
         'score': f'[bold cyan]{fields[1]}/{fields[2]}[/]'
     }, 'Global ranking')
+
+def show_activity(user_id: Optional[int] = None):
+    if user_id is None:
+        user_id = request('/users/me').json().get('id')
+    if user_id < 0:
+        error(f'User ID {user_id} is invalid.')
+
+    activity = request(f'/activity/{user_id}', auth=False).json()
+    if activity.get('success'):
+        timestamps = list(map(datetime.fromisoformat, activity['data']['solve_timestamps']))
+        if not timestamps:
+            fail(f'No solves in the last year for user with ID {user_id}.')
+            return
+        frequencies = [[0 for _ in range(53)] for _ in range(7)]
+        heatmap = [[' ' for _ in range(55)] for _ in range(7)]
+        first_monday = min(timestamps) - timedelta(min(timestamps).weekday())
+        max_frequency = 0
+        for week in range(53):
+            for day in range(7):
+                current_date = first_monday + timedelta(week * 7 + day)
+                frequencies[day][week] = sum(1 if d.date() == current_date.date() else 0 for d in timestamps)
+                max_frequency = max(max_frequency, frequencies[day][week])
+
+        table = Table(*['' for _ in range(56)], title='Hacking Activity', box=None, padding=0)
+        for week in range(53):
+            for day in range(7):
+                current_date = first_monday + timedelta(week * 7 + day)
+                if current_date.day == 1:
+                    for i, month_char in enumerate(current_date.strftime('%b')):
+                        table.columns[week + i + 1].header = month_char
+                redblue = int(0x80 - 0x80 * frequencies[day][week] / max_frequency)
+                green = int(0x80 + 0x7f * frequencies[day][week] / max_frequency)
+                heatmap[day][week] = f'[#{redblue:02x}{green:02x}{redblue:02x}]■[/]'
+
+        for day_name, row in zip(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], heatmap):
+            table.add_row(day_name + ' ', *row)
+        rprint(table)
+
+    else:
+        error(f'User not found for ID {user_id}.')
 
 def get_wechall_rankings(page: int = 1, simple: bool = False):
     render_image = not simple and can_render_image()

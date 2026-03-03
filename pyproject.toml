@@ -12,6 +12,7 @@ dependencies = [
     "cairosvg>=2.8.2",
     "itsdangerous>=2.2.0",
     "mfusepy>=3.1.0",
+    "mpv>=1.0.8",
     "paramiko>=4.0.0",
     "python-socketio[client]>=5.16.1",
     "pyyaml>=6.0.3",
@@ -25,5 +26,5 @@ dependencies = [
 dojo = "dojo_cli:app"
 
 [build-system]
-requires = ["uv_build>=0.10.5,<0.11.0"]
+requires = ["uv_build>=0.10.7,<0.11.0"]
 build-backend = "uv_build"
