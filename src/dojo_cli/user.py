@@ -104,7 +104,7 @@ def show_me(simple: bool = False):
     account['rank'] = f'[b green]{get_rank(fields[0])}/{fields[5]}[/]'
     account['handle'] = f'[b {belt_hex}]{account['name']}[/]'
     if not simple and can_render_image():
-        account['belt'] = download_image(f'/belt/{belt_data['color']}.svg', 'belt')
+        account['belt'] = download_image(f'/belt/{belt_data['color']}.svg')
     else:
         account['belt'] = f'[b {belt_hex}]{belt_data['color'].title()}[/]'
     account['country'] = ''.join(chr(ord(c) + ord('🇦') - ord('A')) for c in account['country'])
@@ -188,7 +188,7 @@ def get_wechall_rankings(page: int = 1, simple: bool = False):
         if render_image:
             if country not in images:
                 img_src = str(tds[1].img['src']) if tds[1].img else ''
-                images[country] = download_image('https://www.wechall.net' + img_src, 'flag')
+                images[country] = download_image('https://www.wechall.net' + img_src)
             row['country'] = images[country]
         else:
             row['country'] = f'[b]{country}[/]'
@@ -219,7 +219,7 @@ def show_scoreboard(dojo_id: Optional[str] = None, module_id: Optional[str] = No
 
             if render_image:
                 if belt not in images:
-                    images[belt] = download_image(row['belt'], 'belt')
+                    images[belt] = download_image(row['belt'])
                 row['belt'] = images[belt]
 
                 if symbol not in images:
@@ -241,9 +241,9 @@ def show_belts(belt: Optional[str] = None, page: Optional[int] = None, simple: b
     render_image = not simple and can_render_image()
     if render_image:
         if belt in response['ranks']:
-            images = {belt: download_image(f'/belt/{belt}.svg', 'belt')}
+            images = {belt: download_image(f'/belt/{belt}.svg')}
         else:
-            images = {belt: download_image(f'/belt/{belt}.svg', 'belt') for belt in response['ranks']}
+            images = {belt: download_image(f'/belt/{belt}.svg') for belt in response['ranks']}
 
     belts = []
     if belt in response['ranks']:
@@ -262,6 +262,7 @@ def show_belts(belt: Optional[str] = None, page: Optional[int] = None, simple: b
             user['date_ascended'] = user['date']
             user['date_ascended'] = datetime.fromisoformat(user['date'])
             belts.append(user)
+
     else:
         title = '[b]Belted Hackers[/]'
         for rank, (id, user) in enumerate(response['users'].items()):
@@ -279,4 +280,5 @@ def show_belts(belt: Optional[str] = None, page: Optional[int] = None, simple: b
 
     if page is not None:
         belts = belts[page * 20:][:20]
+
     show_table(belts, title, ['rank', 'id', 'handle', 'belt', 'website', 'date_ascended'])

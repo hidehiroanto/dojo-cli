@@ -141,7 +141,7 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
                 award = None
             elif 'belt' in dojo['award']:
                 if render_image:
-                    award = download_image(f'/belt/{dojo['award']['belt']}.svg', 'belt')
+                    award = download_image(f'/belt/{dojo['award']['belt']}.svg')
                 else:
                     belt_hex = get_belt_hex(dojo['award']['belt'])
                     award = f'[b {belt_hex}]{dojo['award']['belt'].title()} Belt[/]'

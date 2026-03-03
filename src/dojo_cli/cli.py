@@ -109,7 +109,7 @@ def scoreboard(
     dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
     module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
     duration: Annotated[str, Option('-t', '--duration', help='Scoreboard duration (week, month, all)')] = 'all',
-    page: Annotated[int, Option('-p', '--page', help='Scoreboard page')] = 1,
+    page: Annotated[int, Option('-p', '--page', help='Scoreboard page number')] = 1,
     simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
 ):
     """Show scoreboard for a dojo or module. If no dojo is given, show WeChall global scoreboard."""
@@ -119,14 +119,14 @@ def scoreboard(
 @app.command(rich_help_panel='User Info')
 def belts(
     belt: Annotated[Optional[str], Option('-c', '--color', help='Filter by belt color')] = None,
-    page: Annotated[Optional[int], Option('-p', '--page', help='Belt list page')] = None,
+    page: Annotated[Optional[int], Option('-p', '--page', help='Belt list page number')] = None,
     simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False
 ):
     """Show all the users who have earned belts above white belt."""
 
     show_belts(belt, page, simple)
 
-# TODO: add belts/emojis, solve state, personal and global solve counts
+# TODO: Add solve state, personal and global solve counts
 @app.command(help='An alias for [b cyan]list[/].', rich_help_panel='Challenge Info')
 @app.command('list', rich_help_panel='Challenge Info')
 def ls(
@@ -163,15 +163,17 @@ def twitch():
 @app.command('yt', help='An alias for [b cyan]youtube[/].', rich_help_panel='Video Streaming and Playback')
 @app.command(rich_help_panel='Video Streaming and Playback')
 def youtube(
+    video_id: Annotated[Optional[str], Option('-v', '--video', help='YouTube video ID or URL')] = None,
+    playlist_id: Annotated[Optional[str], Option('-p', '--playlist', help='YouTube playlist ID')] = None,
     dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
     module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
     resource_id: Annotated[Optional[str], Option('-r', '--resource', help='Resource ID')] = None,
-    playlist_id: Annotated[Optional[str], Option('-p', '--playlist', help='YouTube playlist ID')] = None,
-    video_id: Annotated[Optional[str], Option('-v', '--video', help='YouTube video ID')] = None
+    page: Annotated[Optional[int], Option('-n', '--page', help='YouTube feed page number')] = None,
+    simple: Annotated[bool, Option('-s', '--simple', help='Disable thumbnails')] = False
 ):
     """Play a lecture on YouTube."""
 
-    init_youtube(dojo_id, module_id, resource_id, playlist_id, video_id)
+    init_youtube(video_id, playlist_id, dojo_id, module_id, resource_id, page, simple)
 
 @app.command(short_help='Start a new challenge.', rich_help_panel='Challenge Launch')
 def start(
@@ -347,7 +349,7 @@ def upload(
 
     upload_file(local_path, remote_path)
 
-@app.command(short_help='Mount the current challenge locally.', rich_help_panel='Remote Mounting')
+@app.command(short_help='Mount the current challenge locally onto the specified mount point.', rich_help_panel='Remote Mounting')
 def mount(mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None):
     """
     Mount the configured remote project path locally onto the specified mount point.

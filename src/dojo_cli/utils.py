@@ -37,7 +37,7 @@ def show_table(table_data: dict[str, Any] | list[dict[str, Any]], title: Optiona
     table_config = load_user_config()['table']
     def get_column(key: str) -> Column:
         return Column(Text(
-            'ID' if key == 'id' else key.replace('_', ' ').title(),
+            key.upper() if key in ['id', 'url'] else key.replace('_', ' ').title(),
             table_config['column']['style'],
             justify=table_config['column']['justify']
         ))
@@ -56,11 +56,9 @@ def can_render_image():
         return True
     return issubclass(Image, (SixelImage, TGPImage))
 
-def download_image(url: str, image_type: Optional[str] = None):
+def download_image(url: str, height: int = 1):
     base_url = load_user_config()['base_url']
     if not (url.startswith('http://') or url.startswith('https://')):
         url = base_url + url
-
     image = svg2png(url=url) if url.endswith('.svg') else request(url, False, False).content
-    aspect_ratios = {'belt': 6, 'flag': 3, 'symbol': 2}
-    return Image(BytesIO(image), aspect_ratios.get(image_type, 2), 1)
+    return Image(BytesIO(image), 'auto', height)
