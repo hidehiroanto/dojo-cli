@@ -144,14 +144,14 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
                     award = download_image(f'/belt/{dojo['award']['belt']}.svg', 'belt')
                 else:
                     belt_hex = get_belt_hex(dojo['award']['belt'])
-                    award = f'[bold {belt_hex}]{dojo['award']['belt'].title()} Belt[/]'
+                    award = f'[b {belt_hex}]{dojo['award']['belt'].title()} Belt[/]'
             elif 'emoji' in dojo['award']:
                 award = dojo['award']['emoji']
 
             table_data.append({
-                'id': f'[bold cyan]{dojo['id']}[/]',
+                'id': f'[b cyan]{dojo['id']}[/]',
                 'award': award,
-                'name': f'[bold green]{dojo['name']}[/]',
+                'name': f'[b green]{dojo['name']}[/]',
                 'description': Markdown(fix_markdown_links(dojo['description'])) if dojo['description'] else None,
                 'modules': dojo['modules_count'],
                 'challenges': dojo['challenges_count']
@@ -165,8 +165,8 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
 
         for module in modules:
             table_data.append({
-                'id': f'[bold cyan]{module['id']}[/]',
-                'name': f'[bold green]{module['name']}[/]',
+                'id': f'[b cyan]{module['id']}[/]',
+                'name': f'[b green]{module['name']}[/]',
                 'description': Markdown(fix_markdown_links(module['description'])) if module['description'] else None
             })
 
@@ -180,8 +180,8 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
             resource_keys = ['id', 'name', 'type', 'content']
 
             for resource in resources:
-                resource['id'] = f'[bold cyan]{resource['id']}[/]'
-                resource['name'] = f'[bold green]{resource['name']}[/]'
+                resource['id'] = f'[b cyan]{resource['id']}[/]'
+                resource['name'] = f'[b green]{resource['name']}[/]'
 
                 if resource['type'] == 'lecture':
                     resource['content'] = ''
@@ -204,8 +204,8 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
 
         for challenge in module['challenges']:
             table_data.append({
-                'id': f'[bold cyan]{challenge['id']}[/]',
-                'name': f'[bold green]{challenge['name']}[/]',
+                'id': f'[b cyan]{challenge['id']}[/]',
+                'name': f'[b green]{challenge['name']}[/]',
                 'description': Markdown(fix_markdown_links(challenge['description'])) if challenge['description'] else None
             })
     else:
@@ -215,8 +215,8 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
         table_title = f'Challenge Info for {dojo_id}/{module_id}/{challenge_id}'
         table_keys = ['id', 'name', 'description']
 
-        table_data['id'] = f'[bold cyan]{table_data['id']}[/]'
-        table_data['name'] = f'[bold green]{table_data['name']}[/]'
+        table_data['id'] = f'[b cyan]{table_data['id']}[/]'
+        table_data['name'] = f'[b green]{table_data['name']}[/]'
         table_data['description'] = Markdown(fix_markdown_links(table_data['description'])) if table_data['description'] else None
 
     show_table(table_data, table_title, table_keys, show_lines=True)
@@ -320,10 +320,10 @@ def show_hint(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
     fake_flag = serialize_flag(account_id, challenge_num_id)
     flag_prefix = 'pwn.college{'
     flag_suffix = fake_flag[fake_flag.index('.'):] + '}'
-    info(f'The flag starts with: [bold cyan]{flag_prefix}[/]')
-    info(f'The flag ends with: [bold cyan]{flag_suffix}[/]')
+    info(f'The flag starts with: [b cyan]{flag_prefix}[/]')
+    info(f'The flag ends with: [b cyan]{flag_suffix}[/]')
     flag_chars = ''.join(sorted(string.digits + string.ascii_letters + '-_'))
-    info(f'The middle of the flag can only be these characters: [bold cyan]{flag_chars}[/]')
+    info(f'The middle of the flag can only be these characters: [b cyan]{flag_chars}[/]')
 
     chal_data = request('/docker').json()
     if list(map(chal_data.get, ['dojo', 'module', 'challenge', 'practice'])) == [dojo_id, module_id, challenge_id, False]:
@@ -349,7 +349,7 @@ def submit_flag(flag: Optional[str] = None, dojo_id: Optional[str] = None, modul
     if flag in ['practice', 'pwn.college{practice}']:
         warn('This is the practice flag!')
         info('Restart the challenge in normal mode to get the real flag.')
-        info('(You can do this with [bold]dojo restart [green]-n[/][/].)')
+        info('(You can do this with [b]dojo restart [green]-n[/][/].)')
         return
 
     payload = deserialize_flag(flag)

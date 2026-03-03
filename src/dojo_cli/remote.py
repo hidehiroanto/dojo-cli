@@ -76,10 +76,10 @@ def ssh_keygen():
             error(f'Something went wrong: {response['error']}')
     else:
         ssh_key_url = f'{user_config['base_url']}/settings#ssh-key'
-        info(f'Public key: [bold cyan]{public_key}[/]')
+        info(f'Public key: [b cyan]{public_key}[/]')
         info('Not logged in, could not automatically add the public key to your user settings.')
         info(f'Use a browser to log into {apply_style(user_config['base_url'])} and navigate to {apply_style(ssh_key_url)}.')
-        info('Enter the above key into the [bold cyan]Add New SSH Key[/] field, and then click [bold cyan]Add[/].')
+        info('Enter the above key into the [b cyan]Add New SSH Key[/] field, and then click [b cyan]Add[/].')
 
 def bat_file(path: Path):
     if 'DOJO_AUTH_TOKEN' in os.environ:

@@ -63,7 +63,7 @@ class StartChallengeModal(ModalScreen):
         with Container():
             challenge_path = f'{self.dojo_id}/{self.module_id}/{self.challenge_id}'
             challenge_mode = 'privileged' if self.practice else 'unprivileged'
-            yield Label(f'Start challenge [bold]{challenge_path}[/] in {challenge_mode} mode?')
+            yield Label(f'Start challenge [b]{challenge_path}[/] in {challenge_mode} mode?')
             with Horizontal():
                 yield Button.error('Cancel')
                 yield Button.success('Start Challenge')

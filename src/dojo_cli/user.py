@@ -9,7 +9,6 @@ import re
 from requests import Session
 from rich import print as rprint
 from rich.table import Table
-# from termgraph.termgraph import calendar_heatmap
 from typing import Optional
 
 from .config import load_user_config
@@ -35,7 +34,7 @@ def do_register(username: Optional[str] = None, email: Optional[str] = None, pas
                 fail(error_msg)
         else:
             save_cookie({'session': session.cookies.get('session')})
-            success(f'Registered and logged in as user [bold green]{username}[/]!')
+            success(f'Registered and logged in as user [b green]{username}[/]!')
 
 def do_login(username: Optional[str] = None, password: Optional[str] = None):
     while not username:
@@ -53,7 +52,7 @@ def do_login(username: Optional[str] = None, password: Optional[str] = None):
                 fail(error_msg)
         else:
             save_cookie({'session': session.cookies.get('session')})
-            success(f'Logged in as user [bold green]{username}[/]!')
+            success(f'Logged in as user [b green]{username}[/]!')
 
 def do_logout():
     delete_cookie()
@@ -102,17 +101,17 @@ def show_me(simple: bool = False):
     belt_data = request('/belts', auth=False).json()['users'].get(str(account['id']), {})
     belt_hex = get_belt_hex(belt_data.get('color', 'white'))
 
-    account['rank'] = f'[bold green]{get_rank(fields[0])}/{fields[5]}[/]'
-    account['handle'] = f'[bold {belt_hex}]{account['name']}[/]'
+    account['rank'] = f'[b green]{get_rank(fields[0])}/{fields[5]}[/]'
+    account['handle'] = f'[b {belt_hex}]{account['name']}[/]'
     if not simple and can_render_image():
         account['belt'] = download_image(f'/belt/{belt_data['color']}.svg', 'belt')
     else:
-        account['belt'] = f'[bold {belt_hex}]{belt_data['color'].title()}[/]'
+        account['belt'] = f'[b {belt_hex}]{belt_data['color'].title()}[/]'
     account['country'] = ''.join(chr(ord(c) + ord('🇦') - ord('A')) for c in account['country'])
     account['date_ascended'] = datetime.fromisoformat(belt_data['date'])
-    account['score'] = f'[bold cyan]{fields[1]}/{fields[2]}[/]'
+    account['score'] = f'[b cyan]{fields[1]}/{fields[2]}[/]'
 
-    info(f'You are the epic hacker [bold green]{account['name']}[/]!')
+    info(f'You are the epic hacker [b green]{account['name']}[/]!')
     keys = ['rank', 'id', 'handle', 'belt', 'email', 'website', 'affiliation', 'country', 'bracket', 'date_ascended', 'score']
     show_table(account, 'Account Info', keys)
 
@@ -128,9 +127,9 @@ def show_score(username: Optional[str] = None):
     fields = list(map(int, score.split(':')))
 
     show_table({
-        'rank': f'[bold green]{get_rank(fields[0])}/{fields[5]}[/]',
-        'handle': f'[bold green]{username}[/]',
-        'score': f'[bold cyan]{fields[1]}/{fields[2]}[/]'
+        'rank': f'[b green]{get_rank(fields[0])}/{fields[5]}[/]',
+        'handle': f'[b green]{username}[/]',
+        'score': f'[b cyan]{fields[1]}/{fields[2]}[/]'
     }, 'Global ranking')
 
 def show_activity(user_id: Optional[int] = None):
@@ -192,11 +191,11 @@ def get_wechall_rankings(page: int = 1, simple: bool = False):
                 images[country] = download_image('https://www.wechall.net' + img_src, 'flag')
             row['country'] = images[country]
         else:
-            row['country'] = f'[bold]{country}[/]'
+            row['country'] = f'[b]{country}[/]'
 
-        row['username'] = f'[bold]{tds[2].string}[/]'
+        row['username'] = f'[b]{tds[2].string}[/]'
         row['score'] = int(tds[3].string or 0)
-        row['percentage'] = f'[bold cyan]{tds[4].string}[/]'
+        row['percentage'] = f'[b cyan]{tds[4].string}[/]'
         wechall_data.append(row)
 
     return wechall_data
@@ -215,7 +214,7 @@ def show_scoreboard(dojo_id: Optional[str] = None, module_id: Optional[str] = No
             belt_hex = get_belt_hex(belt)
 
             row['rank'] = get_rank(row['rank'])
-            row['handle'] = f'[bold {belt_hex}]{row['name']}[/]'
+            row['handle'] = f'[b {belt_hex}]{row['name']}[/]'
             row['badges'] = ''.join(sorted(badge['emoji'] for badge in row['badges']))
 
             if render_image:
@@ -227,10 +226,10 @@ def show_scoreboard(dojo_id: Optional[str] = None, module_id: Optional[str] = No
                     images[symbol] = download_image(row['symbol'])
                 row['role'] = images[symbol]
             else:
-                row['belt'] = f'[bold {belt_hex}]{belt.title()}[/]'
+                row['belt'] = f'[b {belt_hex}]{belt.title()}[/]'
                 row['role'] = 'ASU Student' if symbol == 'fork' else symbol.title()
 
-        title = f'Scoreboard for [bold]{f'{dojo_id}/{module_id}' if module_id else dojo_id}[/]'
+        title = f'Scoreboard for [b]{f'{dojo_id}/{module_id}' if module_id else dojo_id}[/]'
         show_table(standings, title, ['rank', 'role', 'handle', 'belt', 'badges', 'solves'])
 
     else:
@@ -249,31 +248,31 @@ def show_belts(belt: Optional[str] = None, page: Optional[int] = None, simple: b
     belts = []
     if belt in response['ranks']:
         belt_hex = get_belt_hex(belt)
-        title = f'[bold {belt_hex}]Belted Hackers[/]'
+        title = f'[b {belt_hex}]Belted Hackers[/]'
         for rank, id in enumerate(response['ranks'][belt]):
             user = response['users'][str(id)]
-            user['rank'] = f'[bold green]{get_rank(rank + 1)}/{len(response['ranks'][belt])}[/]'
+            user['rank'] = f'[b green]{get_rank(rank + 1)}/{len(response['ranks'][belt])}[/]'
             user['id'] = id
-            user['handle'] = f'[bold {belt_hex}]{user['handle']}[/]'
+            user['handle'] = f'[b {belt_hex}]{user['handle']}[/]'
             if render_image:
                 user['belt'] = images[belt]
             else:
-                user['belt'] = f'[bold {belt_hex}]{user['color'].title()}[/]'
+                user['belt'] = f'[b {belt_hex}]{user['color'].title()}[/]'
             user['website'] = user['site']
             user['date_ascended'] = user['date']
             user['date_ascended'] = datetime.fromisoformat(user['date'])
             belts.append(user)
     else:
-        title = '[bold]Belted Hackers[/]'
+        title = '[b]Belted Hackers[/]'
         for rank, (id, user) in enumerate(response['users'].items()):
             belt_hex = get_belt_hex(user['color'])
-            user['rank'] = f'[bold green]{get_rank(rank + 1)}/{len(response['users'])}[/]'
+            user['rank'] = f'[b green]{get_rank(rank + 1)}/{len(response['users'])}[/]'
             user['id'] = int(id)
-            user['handle'] = f'[bold {belt_hex}]{user['handle']}[/]'
+            user['handle'] = f'[b {belt_hex}]{user['handle']}[/]'
             if render_image:
                 user['belt'] = images[user['color']]
             else:
-                user['belt'] = f'[bold {belt_hex}]{user['color'].title()}[/]'
+                user['belt'] = f'[b {belt_hex}]{user['color'].title()}[/]'
             user['website'] = user['site']
             user['date_ascended'] = datetime.fromisoformat(user['date'])
             belts.append(user)

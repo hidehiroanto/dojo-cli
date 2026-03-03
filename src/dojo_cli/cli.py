@@ -15,7 +15,7 @@ from .challenge import (
     show_hint, show_list, show_status, stop_challenge, submit_flag
 )
 from .config import DEFAULT_CONFIG_PATH, show_config
-from .editor import init_editor, mount_remote
+from .editor import init_editor, mount_remote, unmount_remote
 from .log import info
 from .remote import bat_file, download_file, edit_path, print_file, run_cmd, ssh_keygen, upload_file
 from .sensai import init_sensai
@@ -34,11 +34,11 @@ app = Typer(
     no_args_is_help=True,
     context_settings={'help_option_names': ['-h', '--help']},
     help=f"""
-    [bold cyan]dojo[/] is a Python command line interface to interact with the website and API at [bold underline blue]pwn.college[/].
+    [b cyan]dojo[/] is a Python command line interface to interact with the website and API at [b u blue]pwn.college[/].
 
-    Type -h or --help after [bold cyan]dojo[/] <COMMAND> to display further documentation for one of the below commands.
+    Type -h or --help after [b cyan]dojo[/] <COMMAND> to display further documentation for one of the below commands.
 
-    Set the [bold green]DOJO_CONFIG[/] environment variable to override the default configuration path at {apply_style(DEFAULT_CONFIG_PATH)}.
+    Set the [b green]DOJO_CONFIG[/] environment variable to override the default configuration path at {apply_style(DEFAULT_CONFIG_PATH)}.
     """,
     add_completion=False
 )
@@ -82,16 +82,16 @@ def keygen():
 
     ssh_keygen()
 
-@app.command('profile', help='An alias for [bold cyan]whoami[/].', rich_help_panel='User Info')
-@app.command('me', help='An alias for [bold cyan]whoami[/].', rich_help_panel='User Info')
+@app.command('profile', help='An alias for [b cyan]whoami[/].', rich_help_panel='User Info')
+@app.command('me', help='An alias for [b cyan]whoami[/].', rich_help_panel='User Info')
 @app.command(rich_help_panel='User Info')
 def whoami(simple: Annotated[bool, Option('-s', '--simple', help='Disable images')] = False):
     """Show information about the current user (you!)"""
 
     show_me(simple)
 
-@app.command('score', help='An alias for [bold cyan]whois[/].', rich_help_panel='User Info')
-@app.command('rank', help='An alias for [bold cyan]whois[/].', rich_help_panel='User Info')
+@app.command('score', help='An alias for [b cyan]whois[/].', rich_help_panel='User Info')
+@app.command('rank', help='An alias for [b cyan]whois[/].', rich_help_panel='User Info')
 @app.command(rich_help_panel='User Info')
 def whois(username: Annotated[Optional[str], Option('-u', '--username', help='Username to query')] = None):
     """Show global ranking for another user. If no username is given, show the current user's ranking."""
@@ -127,7 +127,7 @@ def belts(
     show_belts(belt, page, simple)
 
 # TODO: add belts/emojis, solve state, personal and global solve counts
-@app.command(help='An alias for [bold cyan]list[/].', rich_help_panel='Challenge Info')
+@app.command(help='An alias for [b cyan]list[/].', rich_help_panel='Challenge Info')
 @app.command('list', rich_help_panel='Challenge Info')
 def ls(
     dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
@@ -153,23 +153,25 @@ def tree(
 
     init_tree(dojo_id, module_id, challenge_id, auth, official)
 
-@app.command('ttv', help='An alias for [bold cyan]twitch[/].', rich_help_panel='Video')
-@app.command(rich_help_panel='Video')
+@app.command('ttv', help='An alias for [b cyan]twitch[/].', rich_help_panel='Video Streaming and Playback')
+@app.command(rich_help_panel='Video Streaming and Playback')
 def twitch():
     """Play the pwn.college live stream on Twitch."""
 
     init_twitch()
 
-@app.command('yt', help='An alias for [bold cyan]youtube[/].', rich_help_panel='Video')
-@app.command(rich_help_panel='Video')
+@app.command('yt', help='An alias for [b cyan]youtube[/].', rich_help_panel='Video Streaming and Playback')
+@app.command(rich_help_panel='Video Streaming and Playback')
 def youtube(
-    dojo_id: Annotated[str, Option('-d', '--dojo', help='Dojo ID')],
-    module_id: Annotated[str, Option('-m', '--module', help='Module ID')],
-    resource_id: Annotated[str, Option('-r', '--resource', help='Resource ID')]
+    dojo_id: Annotated[Optional[str], Option('-d', '--dojo', help='Dojo ID')] = None,
+    module_id: Annotated[Optional[str], Option('-m', '--module', help='Module ID')] = None,
+    resource_id: Annotated[Optional[str], Option('-r', '--resource', help='Resource ID')] = None,
+    playlist_id: Annotated[Optional[str], Option('-p', '--playlist', help='YouTube playlist ID')] = None,
+    video_id: Annotated[Optional[str], Option('-v', '--video', help='YouTube video ID')] = None
 ):
-    """Play a lecture on YouTube using a resource ID obtained from [bold cyan]ls[/]."""
+    """Play a lecture on YouTube."""
 
-    init_youtube(dojo_id, module_id, resource_id)
+    init_youtube(dojo_id, module_id, resource_id, playlist_id, video_id)
 
 @app.command(short_help='Start a new challenge.', rich_help_panel='Challenge Launch')
 def start(
@@ -200,7 +202,7 @@ def start_next(
 
     init_next(normal, privileged)
 
-@app.command('prev', help='An alias for [bold cyan]previous[/].', rich_help_panel='Challenge Launch')
+@app.command('prev', help='An alias for [b cyan]previous[/].', rich_help_panel='Challenge Launch')
 @app.command(rich_help_panel='Challenge Launch')
 def previous(
     normal: Annotated[bool, Option('-n', '--normal', help='Start in normal mode.')] = False,
@@ -226,7 +228,7 @@ def stop():
 
     stop_challenge()
 
-@app.command('ps', help='An alias for [bold cyan]status[/].', rich_help_panel='Challenge Status')
+@app.command('ps', help='An alias for [b cyan]status[/].', rich_help_panel='Challenge Status')
 @app.command(rich_help_panel='Challenge Status')
 def status():
     """Show the status of the current challenge."""
@@ -281,11 +283,11 @@ def zsh(command: Annotated[Optional[str], Option('-c', help='Run the given comma
 
     init_zsh(command)
 
-@app.command('ssh', help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
-@app.command(help='An alias for [bold cyan]exec[/].', rich_help_panel='Remote Execution')
+@app.command('ssh', help='An alias for [b cyan]exec[/].', rich_help_panel='Remote Execution')
+@app.command(help='An alias for [b cyan]exec[/].', rich_help_panel='Remote Execution')
 @app.command('exec', rich_help_panel='Remote Execution')
 def run(command: Annotated[Optional[str], Argument(help='The command to run')] = None):
-    """Execute a remote command. If no command is given, start a shell like [bold cyan]connect[/]."""
+    """Execute a remote command. If no command is given, start a shell like [b cyan]connect[/]."""
 
     run_cmd(command)
 
@@ -294,7 +296,7 @@ def du(
     path: Annotated[Optional[Path], Option('-p', '--path', help='Path to list files from.')] = None,
     count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20
 ):
-    """List the largest files in a directory, using [bold cyan]du[/]. Helpful when clearing up space."""
+    """List the largest files in a directory, using [b cyan]du[/]. Helpful when clearing up space."""
 
     run_cmd(f'find {path or '~'} -type f -exec du -hs {{}} + 2>/dev/null | sort -hr | head -n {count}')
 
@@ -303,13 +305,13 @@ def dust(
     path: Annotated[Optional[Path], Option('-p', '--path', help='Path to list files from.')] = None,
     count: Annotated[int, Option('-n', '--lines', help='Number of files to display.')] = 20
 ):
-    """List the largest files in a directory, using [bold cyan]dust[/]. Helpful when clearing up space."""
+    """List the largest files in a directory, using [b cyan]dust[/]. Helpful when clearing up space."""
 
     run_cmd(f'dust -CFprsx -n {count} {path or '~'} 2>/dev/null')
 
 @app.command(rich_help_panel='Remote Transfer')
 def bat(path: Annotated[Path, Argument(help='The file to print.')]):
-    """Print the contents of a remote file to standard out using [bold cyan]bat[/]."""
+    """Print the contents of a remote file to standard out using [b cyan]bat[/]."""
 
     bat_file(path)
 
@@ -319,7 +321,7 @@ def cat(path: Annotated[Path, Argument(help='The file to print.')]):
 
     print_file(path)
 
-@app.command('down', help='An alias for [bold cyan]download[/].', rich_help_panel='Remote Transfer')
+@app.command('down', help='An alias for [b cyan]download[/].', rich_help_panel='Remote Transfer')
 @app.command(short_help='Download a file from remote to local.', rich_help_panel='Remote Transfer')
 def download(
     remote_path: Annotated[Path, Argument(help='Path of remote file.')],
@@ -332,7 +334,7 @@ def download(
 
     download_file(remote_path, local_path)
 
-@app.command('up', help='An alias for [bold cyan]upload[/].', rich_help_panel='Remote Transfer')
+@app.command('up', help='An alias for [b cyan]upload[/].', rich_help_panel='Remote Transfer')
 @app.command(short_help='Upload a file from local to remote.', rich_help_panel='Remote Transfer')
 def upload(
     local_path: Annotated[Path, Argument(help='Path of local file.')],
@@ -345,7 +347,7 @@ def upload(
 
     upload_file(local_path, remote_path)
 
-@app.command(short_help='Mount the current challenge locally.', rich_help_panel='Remote Editing')
+@app.command(short_help='Mount the current challenge locally.', rich_help_panel='Remote Mounting')
 def mount(mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None):
     """
     Mount the configured remote project path locally onto the specified mount point.
@@ -353,6 +355,16 @@ def mount(mount_point: Annotated[Optional[Path], Option('-p', '--point', help='P
     """
 
     mount_remote(mount_point)
+
+@app.command('umount', help='An alias for [b cyan]unmount[/].', rich_help_panel='Remote Mounting')
+@app.command(short_help='Unmount the filesystem at the specified mount point.', rich_help_panel='Remote Mounting')
+def unmount(mount_point: Annotated[Optional[Path], Option('-p', '--point', help='Path of the mount point.')] = None):
+    """
+    Unmount the filesystem at the specified mount point.
+    If no mount point is specified, it defaults to the configured mount point.
+    """
+
+    unmount_remote(mount_point)
 
 @app.command(short_help='Mount the current challenge locally and open it in the specified editor.', rich_help_panel='Remote Editing')
 def edit(
@@ -534,7 +546,7 @@ def windsurf(
 
     init_editor('Windsurf', path, mount_point)
 
-@app.command('vi', help='An alias for [bold cyan]vim[/].', rich_help_panel='Remote Editing')
+@app.command('vi', help='An alias for [b cyan]vim[/].', rich_help_panel='Remote Editing')
 @app.command(rich_help_panel='Remote Editing')
 def vim(path: Annotated[Optional[Path], Argument(help='The path to open.')] = None):
     """Open a remote directory or file in Vim."""
@@ -578,7 +590,7 @@ def sensai(simple: Annotated[bool, Option('-s', '--simple', help='Disable TUI')]
 
     init_sensai(simple)
 
-@app.command('submit', help='An alias for [bold cyan]solve[/].', rich_help_panel='Flag Submission')
+@app.command('submit', help='An alias for [b cyan]solve[/].', rich_help_panel='Flag Submission')
 @app.command(short_help='Submit a flag for a challenge.', rich_help_panel='Flag Submission')
 def solve(
     flag: Annotated[Optional[str], Option('-f', '--flag', help='Flag to submit.')] = None,
@@ -603,6 +615,6 @@ def config(show_default: Annotated[bool, Option('-d', '--default', help='Show th
 
 @app.command(rich_help_panel='CLI Help')
 def help():
-    """Start a TUI to explore command documentation for the CLI. Press [bold cyan]^q[/] to quit."""
+    """Start a TUI to explore command documentation for the CLI. Press [b cyan]^q[/] to quit."""
 
     init_trogon(app)

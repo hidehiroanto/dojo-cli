@@ -124,13 +124,13 @@ def upload_zed_server():
         error(f'Your OS is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
 
     if not zed_app.is_file():
-        error(f'Please install Zed first: [bold cyan]curl -f {ZED_INSTALL_URL} | sh[/].')
+        error(f'Please install Zed first: [b cyan]curl -f {ZED_INSTALL_URL} | sh[/].')
     zed_system_specs = subprocess.run([zed_app, '--system-specs'], capture_output=True).stdout
     zed_semver = zed_system_specs.split()[6].decode()
     zed_server = f'zed-remote-server-stable-{zed_semver[1:]}'
 
     info(f'Installed versions of zed-remote-server: {zed_old_versions}')
-    info(f'Installed version of local Zed binary: [bold cyan]{zed_semver}[/]')
+    info(f'Installed version of local Zed binary: [b cyan]{zed_semver}[/]')
 
     if zed_server not in zed_old_versions:
         info('Updating zed-remote-server...')
@@ -155,7 +155,7 @@ def upload_zed_server():
             upload_file(Path(temp_file.name), zed_server_dir / zed_server, False)
 
         client.chmod(str(zed_server_dir / zed_server), 0o755)
-        success(f'Updated zed-remote-server to version [bold cyan]{zed_semver}[/]')
+        success(f'Updated zed-remote-server to version [b cyan]{zed_semver}[/]')
 
 def upload_lang_server(lang_server: str, arch: str, latest_url: str):
     client = get_remote_client()
@@ -167,7 +167,7 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
     latest = requests.get(latest_url).json()
 
     info(f'Installed versions of {lang_server}: {old_versions}')
-    info(f'Latest version of {lang_server}: [bold cyan]{latest['name']}[/]')
+    info(f'Latest version of {lang_server}: [b cyan]{latest['name']}[/]')
 
     if f'{lang_server}-{latest['name']}' not in old_versions:
         info(f'Updating {lang_server}...')
@@ -195,7 +195,7 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
             upload_file(Path(temp_file.name), lang_server_dir / lang_server, False)
 
         client.chmod(str(lang_server_dir / lang_server), 0o755)
-        success(f'Updated {lang_server} to version [bold cyan]{latest['name']}[/]')
+        success(f'Updated {lang_server} to version [b cyan]{latest['name']}[/]')
 
 def run_zed():
     ssh_config = load_user_config()['ssh']

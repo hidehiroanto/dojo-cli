@@ -28,24 +28,24 @@ DEFAULT_CONFIG = {
     'editor': 'Visual Studio Code',
     'log_styles': {
         'error': 'on red',
-        'fail': 'bold red',
-        'info': 'bold blue',
-        'success': 'bold green',
-        'warn': 'bold yellow'
+        'fail': 'b red',
+        'info': 'b blue',
+        'success': 'b green',
+        'warn': 'b yellow'
     },
     'object_styles': {
-        'False': 'bold italic bright_red',
-        'None': 'bold italic magenta',
-        'True': 'bold italic bright_green',
+        'False': 'b i bright_red',
+        'None': 'b i magenta',
+        'True': 'b i bright_green',
         'bytes': 'green',
-        'date': 'bold blue',
+        'date': 'b blue',
         'email': 'bright_cyan',
-        'float': 'bold cyan',
-        'int': 'bold cyan',
-        'filename': 'bold bright_magenta',
-        'path': 'bold magenta',
-        'rank': 'bold green',
-        'time': 'bold magenta',
+        'float': 'b cyan',
+        'int': 'b cyan',
+        'filename': 'b bright_magenta',
+        'path': 'b magenta',
+        'rank': 'b green',
+        'time': 'b magenta',
         'url': 'bright_blue'
     },
     'package_manager': {
@@ -91,7 +91,7 @@ def load_config(config_path: Path):
             return {}
         return yaml.safe_load(config_data)
     except Exception as e:
-        rprint(f'[[on red]ERROR[/]] Error loading config file at [bold]{config_path}[/]: {e}', file=sys.stderr)
+        rprint(f'[[on red]ERROR[/]] Error loading config file at [b]{config_path}[/]: {e}', file=sys.stderr)
         exit(1)
 
 def deepmerge(dst_dict: dict, src_dict: dict) -> dict:

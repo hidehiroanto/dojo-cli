@@ -141,15 +141,17 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
         else:
             error('Something went wrong with the SSH config file or the SSH key, please make sure at least one is valid.')
 
+    info(f'Run [b cyan]dojo umount -p {mount_point}[/] to unmount the filesystem.')
+
+def unmount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
+    mount_point = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
+
     if UNAME_SYSTEM == 'Darwin':
-        info(f'To unmount, run: [bold cyan]diskutil umount {mount_point}[/]')
-        info(f'If that does not work, run: [bold cyan]diskutil umount force {mount_point}[/]')
+        subprocess.run(['diskutil', 'umount', 'force', mount_point])
     elif UNAME_SYSTEM == 'Linux':
-        info(f'To unmount, run: [bold cyan]umount {mount_point}[/]')
-        info(f'If that does not work, run: [bold cyan]umount -f {mount_point}[/]')
+        subprocess.run(['umount', '-f', mount_point])
     elif UNAME_SYSTEM == 'Windows':
-        info(f'To unmount, run: [bold cyan]net use {mount_point} /d[/]')
-        info(f'If that does not work, run: [bold cyan]net use {mount_point} /d /y[/]')
+        subprocess.run(['net', 'use', mount_point, '/d', '/y'])
     else:
         error(f'Unsupported platform: {UNAME_SYSTEM}')
 
@@ -204,8 +206,8 @@ def init_editor(editor_name: Optional[str] = None, path: Optional[Path] = None, 
         install_editor(SUPPORTED_EDITORS[editor_name])
 
     if UNAME_SYSTEM == 'Darwin':
-        warn(f'You may see a popup like: [bold yellow]{editor_name}.app would like to access files on a network volume.[/]')
-        warn('If so, please click [bold green]Allow[/].')
+        warn(f'You may see a popup like: [b yellow]{editor_name}.app would like to access files on a network volume.[/]')
+        warn('If so, please click [b green]Allow[/].')
         warn('Otherwise, you may need to enable Full Disk Access so that the editor can access the mounted volume.')
         warn('If so, navigate to System Settings > Privacy & Security > Full Disk Access.')
         warn(f'Then turn on Full Disk Access permissions for {editor_name}.')
