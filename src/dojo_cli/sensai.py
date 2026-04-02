@@ -1,6 +1,4 @@
-"""
-Handles SensAI.
-"""
+"""Handles SensAI."""
 
 import os
 from pathlib import Path

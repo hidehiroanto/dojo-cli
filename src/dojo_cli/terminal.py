@@ -1,6 +1,4 @@
-"""
-Handles terminal output formatting.
-"""
+"""Handles terminal output formatting."""
 
 import datetime
 from pathlib import Path

@@ -1,6 +1,4 @@
-"""
-Constants for the pwn.college dojo CLI.
-"""
+"""Constants for the pwn.college dojo CLI."""
 
 from pathlib import Path
 import platform

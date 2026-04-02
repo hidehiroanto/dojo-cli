@@ -1,6 +1,4 @@
-"""
-Handles HTTP requests and responses.
-"""
+"""Handles HTTP requests and responses."""
 
 from itsdangerous import URLSafeTimedSerializer
 import json

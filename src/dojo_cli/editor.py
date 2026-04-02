@@ -1,6 +1,4 @@
-"""
-Handles installing, updating, and launching SSHFS and code editors.
-"""
+"""Handles installing, updating, and launching SSHFS and code editors."""
 
 # TODO: Add more package managers, Windows support?
 # TODO: Move mount stuff to client.py or mount.py?
@@ -16,7 +14,7 @@ from .client import RemoteClient
 from .config import load_user_config
 from .constants import UNAME_SYSTEM
 from .http import request
-from .install import homebrew_install, wax_install, zerobrew_install
+from .install import homebrew_install, nanobrew_install, wax_install, zerobrew_install
 from .log import error, info, warn
 
 USR_BIN_DIR = Path('/usr/bin')
@@ -74,6 +72,8 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
             info('Installing fuse-t...')
             if package_manager == 'homebrew':
                 homebrew_install(casks=['fuse-t'], taps=['macos-fuse-t/cask'])
+            elif package_manager == 'nanobrew':
+                nanobrew_install(casks=['macos-fuse-t/cask/fuse-t'])
             elif package_manager == 'wax':
                 wax_install(casks=['fuse-t'], taps=['macos-fuse-t/cask'])
             elif package_manager == 'zerobrew':
@@ -102,6 +102,8 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
                 info('Installing fuse-t-sshfs...')
                 if package_manager == 'homebrew':
                     homebrew_install(casks=['fuse-t-sshfs'], taps=['macos-fuse-t/cask'])
+                elif package_manager == 'nanobrew':
+                    nanobrew_install(casks=['macos-fuse-t/cask/fuse-t-sshfs'])
                 elif package_manager == 'wax':
                     warn('Wax cannot find the fuse-t-sshfs cask for some reason, falling back to Homebrew.')
                     homebrew_install(casks=['fuse-t-sshfs'], taps=['macos-fuse-t/cask'])
@@ -115,6 +117,8 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
                 # sshfs should already be shipped by all major Linux distributions
                 if package_manager == 'homebrew':
                     homebrew_install(['sshfs'])
+                elif package_manager == 'nanobrew':
+                    nanobrew_install(['sshfs'])
                 elif package_manager == 'wax':
                     wax_install(['sshfs'])
                 elif package_manager == 'zerobrew':
@@ -163,6 +167,10 @@ def install_editor(editor):
     package_manager = load_user_config()['package_manager'][UNAME_SYSTEM]
     if package_manager == 'homebrew':
         homebrew_install(editor['brew'].get('formulae'), editor['brew'].get('casks'), editor['brew'].get('taps'))
+    elif package_manager == 'nanobrew':
+        if 'taps' in editor['brew']:
+            error(f'Please install {editor['cli']} manually.')
+        nanobrew_install(editor['brew'].get('formulae'), editor['brew'].get('casks'))
     elif package_manager == 'wax':
         # Avoid using, wax cask installation is broken, IO error: Permission denied (os error 13)
         wax_install(editor['brew'].get('formulae'), editor['brew'].get('casks'), editor['brew'].get('taps'))

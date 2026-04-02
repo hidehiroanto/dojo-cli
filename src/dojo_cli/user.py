@@ -1,6 +1,4 @@
-"""
-Handles user login and data.
-"""
+"""Handles user login and data."""
 
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta

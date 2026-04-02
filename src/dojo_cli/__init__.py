@@ -1,6 +1,4 @@
-"""
-This is the package for the pwn.college dojo CLI.
-"""
+"""This is the package for the pwn.college dojo CLI."""
 
 from .cli import app
 

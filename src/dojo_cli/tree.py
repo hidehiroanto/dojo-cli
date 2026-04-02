@@ -1,6 +1,4 @@
-"""
-Handles the tree view TUI.
-"""
+"""Handles the tree view TUI."""
 
 from rich.text import Text
 from textual.app import App, ComposeResult

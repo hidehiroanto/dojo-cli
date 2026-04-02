@@ -1,6 +1,4 @@
-"""
-Utility functions for the pwn.college dojo CLI.
-"""
+"""Utility functions for the pwn.college dojo CLI."""
 
 from cairosvg import svg2png
 from io import BytesIO

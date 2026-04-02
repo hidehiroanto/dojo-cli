@@ -1,6 +1,4 @@
-"""
-Handles installing and updating package managers, and uses those managers to install and update packages and tools.
-"""
+"""Handles installing and updating package managers, and uses those managers to install and update packages and tools."""
 
 from pathlib import Path
 import requests
@@ -19,6 +17,8 @@ if UNAME_SYSTEM == 'Darwin':
 elif UNAME_SYSTEM == 'Linux':
     HOMEBREW_PREFIX = Path('/home/linuxbrew/.linuxbrew')
 
+NANOBREW_PREFIX = Path('/opt/nanobrew/prefix')
+
 if Path('/opt/zerobrew').is_dir() or UNAME_SYSTEM == 'Darwin':
     ZEROBREW_ROOT = Path('/opt/zerobrew')
 else:
@@ -26,6 +26,7 @@ else:
 ZEROBREW_PREFIX = ZEROBREW_ROOT if UNAME_SYSTEM == 'Darwin' else ZEROBREW_ROOT / 'prefix'
 
 HOMEBREW_INSTALL_URL = 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
+NANOBREW_INSTALL_URL = 'https://nanobrew.trilok.ai/install'
 RUSTUP_INSTALL_URL = 'https://sh.rustup.rs'
 SCOOP_INSTALL_URL = 'https://get.scoop.sh'
 UV_INSTALL_URL = 'https://astral.sh/uv/install.sh'
@@ -55,6 +56,35 @@ def homebrew_install(
         subprocess.run([brew, 'install', '--cask'] + casks)
     if formulae:
         subprocess.run([brew, 'install'] + formulae)
+
+def nanobrew_install(
+    formulae: Optional[list[str]] = None,
+    casks: Optional[list[str]] = None,
+    taps: Optional[list[str]] = None,
+    skip_update: bool = False
+):
+    """
+    Install formulae and casks using Nanobrew.
+
+    Faster than zerobrew. Faster than homebrew. Written in Zig.
+    SIMD extraction + mmap + arena allocators + platform COW copy.
+    Works on macOS and Linux.
+    """
+
+    nb = Path(which('nb') or NANOBREW_PREFIX / 'bin' / 'nb')
+    if not nb.is_file():
+        info('Installing Nanobrew...')
+        subprocess.run(requests.get(NANOBREW_INSTALL_URL).text, shell=True)
+        nb = Path(which('nb') or NANOBREW_PREFIX / 'bin' / 'nb')
+    elif not skip_update:
+        subprocess.run([nb, 'update'])
+
+    if taps:
+        error('No need to install taps, just install third-party tap formulae e.g. `user/tap/formula` directly')
+    if casks:
+        subprocess.run([nb, 'install', '--cask'] + casks)
+    if formulae:
+        subprocess.run([nb, 'install'] + formulae)
 
 def scoop_install(
     packages: Optional[list[str]] = None,

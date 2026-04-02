@@ -9,23 +9,23 @@ authors = [
 requires-python = ">=3.14.3"
 dependencies = [
     "beautifulsoup4>=4.14.3",
-    "cairosvg>=2.8.2",
+    "cairosvg>=2.9.0",
+    "cyclopts>=4.10.1",
     "itsdangerous>=2.2.0",
-    "mfusepy>=3.1.0",
+    "mfusepy>=3.1.1",
     "mpv>=1.0.8",
     "paramiko>=4.0.0",
     "python-socketio[client]>=5.16.1",
     "pyyaml>=6.0.3",
-    "requests>=2.32.5",
+    "requests>=2.33.1",
     "textual-image>=0.8.5",
     "trogon>=0.6.0",
-    "typer>=0.24.1",
-    "yt-dlp>=2026.3.3",
+    "yt-dlp>=2026.3.17",
 ]
 
 [project.scripts]
 dojo = "dojo_cli:app"
 
 [build-system]
-requires = ["uv_build>=0.10.7,<0.11.0"]
+requires = ["uv_build>=0.11.2"]
 build-backend = "uv_build"

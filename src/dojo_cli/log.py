@@ -1,6 +1,4 @@
-"""
-Handles logging.
-"""
+"""Handles logging."""
 
 from rich import print as rprint
 import sys

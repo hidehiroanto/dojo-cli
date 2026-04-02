@@ -1,6 +1,4 @@
-"""
-This file contains the implementation of the RemoteClient class.
-"""
+"""This file contains the implementation of the RemoteClient class."""
 
 import errno
 import mfusepy as fuse

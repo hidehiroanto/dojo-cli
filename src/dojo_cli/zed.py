@@ -1,6 +1,4 @@
-"""
-Handles installing, updating, and launching Zed.
-"""
+"""Handles installing, updating, and launching Zed."""
 
 from io import BytesIO
 import gzip
@@ -18,7 +16,7 @@ from .client import get_remote_client
 from .config import load_user_config
 from .constants import UNAME_SYSTEM, XDG_BIN_HOME, XDG_CONFIG_HOME
 from .http import request
-from .install import homebrew_install, uv_install, wax_install, zerobrew_install
+from .install import homebrew_install, nanobrew_install, uv_install, wax_install, zerobrew_install
 from .log import error, info, success, warn
 from .remote import run_cmd, upload_file
 
@@ -41,6 +39,8 @@ def install_zed():
         # TODO: add support for other package managers
         if package_manager == 'homebrew':
             homebrew_install(casks=['zed'])
+        elif package_manager == 'nanobrew':
+            nanobrew_install(casks=['zed'])
         elif package_manager == 'wax':
             wax_install(casks=['zed'])
         elif package_manager == 'zerobrew':
@@ -59,6 +59,8 @@ def install_lang_servers(lang_servers: list[str]):
         # TODO: add support for other package managers
         if package_manager == 'homebrew':
             homebrew_install(lang_servers, skip_update=True)
+        elif package_manager == 'nanobrew':
+            nanobrew_install(lang_servers, skip_update=True)
         elif package_manager == 'wax':
             wax_install(lang_servers, skip_update=True)
         elif package_manager == 'zerobrew':

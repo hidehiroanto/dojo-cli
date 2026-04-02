@@ -1,6 +1,4 @@
-"""
-Handles video playback for Twitch and YouTube.
-"""
+"""Handles video playback for Twitch and YouTube."""
 
 from pathlib import Path
 from shutil import which
@@ -11,7 +9,7 @@ import yt_dlp
 from .config import load_user_config
 from .constants import UNAME_SYSTEM
 from .http import request
-from .install import homebrew_install, wax_install, zerobrew_install
+from .install import homebrew_install, nanobrew_install, wax_install, zerobrew_install
 from .log import error
 from .utils import can_render_image, download_image, show_table
 
@@ -29,6 +27,8 @@ def play_twitch(channel: str):
         if not Path(which('iina') or '/Applications/IINA.app/Contents/MacOS/iina-cli').is_file():
             if package_manager == 'homebrew':
                 homebrew_install(casks=['iina'])
+            elif package_manager == 'nanobrew':
+                nanobrew_install(casks=['iina'])
             elif package_manager == 'wax':
                 wax_install(casks=['iina'])
             elif package_manager == 'zerobrew':
@@ -41,6 +41,8 @@ def play_twitch(channel: str):
         if not Path(which('mpv') or '/usr/bin/mpv').is_file():
             if package_manager == 'homebrew':
                 homebrew_install(['mpv'])
+            elif package_manager == 'nanobrew':
+                nanobrew_install(['mpv'])
             elif package_manager == 'wax':
                 wax_install(['mpv'])
             elif package_manager == 'zerobrew':
@@ -66,6 +68,8 @@ def play_youtube(video_id: str, playlist_id: Optional[str] = None):
         if not Path(which('iina') or '/Applications/IINA.app/Contents/MacOS/iina-cli').is_file():
             if package_manager == 'homebrew':
                 homebrew_install(casks=['iina'])
+            elif package_manager == 'nanobrew':
+                nanobrew_install(casks=['iina'])
             elif package_manager == 'wax':
                 wax_install(casks=['iina'])
             elif package_manager == 'zerobrew':
@@ -81,6 +85,8 @@ def play_youtube(video_id: str, playlist_id: Optional[str] = None):
         if not Path(which('mpv') or '/usr/bin/mpv').is_file():
             if package_manager == 'homebrew':
                 homebrew_install(['mpv'])
+            elif package_manager == 'nanobrew':
+                nanobrew_install(['mpv'])
             elif package_manager == 'wax':
                 wax_install(['mpv'])
             elif package_manager == 'zerobrew':
@@ -132,8 +138,10 @@ def init_youtube(
         for row in feed:
             row['id'] = f'[b cyan]{row['id']}[/]'
             row['title'] = f'[b green]{row['title']}[/]'
+            duration = int(row['duration'])
+            row['duration'] = f'{duration // 3600:02}:{(duration % 3600) // 60:02}:{duration % 60:02}'
             if render_image:
                 row['thumbnail'] = download_image(row['thumbnails'][0]['url'], 3)
 
-        table_keys = ['id', 'thumbnail', 'title', 'url'] if render_image else ['id', 'title', 'url']
+        table_keys = ['id', 'thumbnail', 'title', 'url', 'duration'] if render_image else ['id', 'title', 'url', 'duration']
         show_table(feed, 'YouTube Feed', table_keys)

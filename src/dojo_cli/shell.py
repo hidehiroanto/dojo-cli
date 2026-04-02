@@ -1,6 +1,4 @@
-"""
-Handles custom shell initialization.
-"""
+"""Handles custom shell initialization."""
 
 import shlex
 from typing import Optional

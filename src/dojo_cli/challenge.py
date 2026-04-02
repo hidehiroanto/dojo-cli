@@ -1,6 +1,4 @@
-"""
-Handles challenge initialization and flag submission.
-"""
+"""Handles challenge initialization and flag submission."""
 
 from bs4 import BeautifulSoup
 from itsdangerous import URLSafeSerializer
