@@ -7,7 +7,7 @@
 from pathlib import Path
 from typing import Annotated, Optional
 
-from cyclopts import App, Group, Parameter
+from cyclopts import App, Group, Parameter, validators
 from cyclopts.types import ResolvedDirectory, ResolvedExistingFile, ResolvedPath
 
 from .challenge import (
@@ -255,14 +255,15 @@ def youtube(*,
     init_youtube(video_id, playlist_id, dojo_id, module_id, resource_id, page, simple)
 
 challenge_launch = Group.create_ordered('Challenge Launch')
+challenge_mode = Group(validator=validators.mutually_exclusive)
 
 @app.command(group=challenge_launch)
 def start(*,
     dojo_id: Annotated[Optional[str], Parameter(name='--dojo', alias='-d')] = None,
     module_id: Annotated[Optional[str], Parameter(name='--module', alias='-m')] = None,
     challenge_id: Annotated[Optional[str], Parameter(name='--challenge', alias='-c')] = None,
-    normal: Annotated[bool, Parameter(alias='-n')] = False,
-    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'))] = False
+    normal: Annotated[bool, Parameter(alias='-n', group=challenge_mode)] = False,
+    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)] = False
 ):
     """
     Start a new challenge. The challenge ID can either be by itself or in the format `<dojo>/<module>/<challenge>`.
@@ -270,7 +271,7 @@ def start(*,
     If no dojo or no module is given, they are inferred from the challenge ID.
     If no challenge is given, restart the current challenge.
 
-    If both --normal and --privileged are given, --privileged takes precedence.
+    `--normal` and `--privileged` are mutually exclusive.
     If neither --normal nor --privileged are given, start in the current mode if a challenge is running, otherwise start in normal mode.
 
     Args:
@@ -284,8 +285,8 @@ def start(*,
 
 @app.command(name='next', group=challenge_launch)
 def start_next(*,
-    normal: Annotated[bool, Parameter(alias='-n')] = False,
-    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'))] = False
+    normal: Annotated[bool, Parameter(alias='-n', group=challenge_mode)] = False,
+    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)] = False
 ):
     """
     Start the next challenge in the current module.
@@ -298,8 +299,8 @@ def start_next(*,
 
 @app.command(alias='prev', group=challenge_launch)
 def previous(*,
-    normal: Annotated[bool, Parameter(alias='-n')] = False,
-    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'))] = False
+    normal: Annotated[bool, Parameter(alias='-n', group=challenge_mode)] = False,
+    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)] = False
 ):
     """
     Start the previous challenge in the current module.
@@ -312,8 +313,8 @@ def previous(*,
 
 @app.command(group=challenge_launch)
 def restart(*,
-    normal: Annotated[bool, Parameter(alias='-n')] = False,
-    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'))] = False
+    normal: Annotated[bool, Parameter(alias='-n', group=challenge_mode)] = False,
+    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)] = False
 ):
     """
     Restart the current challenge. This will restart in the current mode by default.
