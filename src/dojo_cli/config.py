@@ -4,8 +4,9 @@ from copy import deepcopy
 import json
 import os
 from pathlib import Path
-from rich import print as rprint
 import sys
+
+from rich import print as rprint
 import yaml
 
 from .constants import SSH_HOME, XDG_CACHE_HOME, XDG_CONFIG_HOME, XDG_DATA_HOME

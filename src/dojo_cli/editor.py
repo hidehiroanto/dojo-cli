@@ -3,12 +3,13 @@
 # TODO: Add more package managers, Windows support?
 # TODO: Move mount stuff to client.py or mount.py?
 
-import mfusepy as fuse
 import os
 from pathlib import Path
 from shutil import which
 import subprocess
 from typing import Optional
+
+import mfusepy as fuse
 
 from .client import RemoteClient
 from .config import load_user_config

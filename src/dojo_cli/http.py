@@ -1,12 +1,13 @@
 """Handles HTTP requests and responses."""
 
-from itsdangerous import URLSafeTimedSerializer
 import json
 import os
 from pathlib import Path
 import re
-from requests import Session
 from typing import Optional
+
+from itsdangerous import URLSafeTimedSerializer
+from requests import Session
 
 from .config import load_user_config
 from .log import error

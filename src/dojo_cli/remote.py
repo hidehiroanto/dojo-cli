@@ -1,7 +1,5 @@
 """Handles remote SSH connections."""
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
 import os
 from pathlib import Path
 import select
@@ -13,6 +11,9 @@ import sys
 import termios
 import tty
 from typing import Optional
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
 
 from .client import get_remote_client
 from .config import load_user_config
