@@ -5,7 +5,7 @@ It comes with a command line interface called `dojo`.
 
 ## Images
 
-![dojo](https://github.com/hidehiroanto/dojo-cli/blob/main/images/help-black.png)
+![dojo](https://github.com/hidehiroanto/dojo-cli/blob/main/images/help-cyclopts.png)
 ![trogon](https://github.com/hidehiroanto/dojo-cli/blob/main/images/trogon-tokyo-night.png)
 ![tree](https://github.com/hidehiroanto/dojo-cli/blob/main/images/tree-catppuccin-mocha.png)
 ![sensai](https://github.com/hidehiroanto/dojo-cli/blob/main/images/sensai-gruvbox.png)

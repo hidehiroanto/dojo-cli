@@ -26,7 +26,7 @@ ZED_ARCH = 'zed-remote-server-linux-x86_64'
 ZED_DOCS_URL = 'https://zed.dev/docs/remote-development'
 ZED_INSTALL_URL = 'https://zed.dev/install.sh'
 ZED_RELEASES_URL = 'https://api.github.com/repos/zed-industries/zed/releases'
-ZED_SETTINGS_PATH = XDG_CONFIG_HOME / 'zed' / 'settings.json'
+ZED_SETTINGS_PATH = XDG_CONFIG_HOME.expanduser() / 'zed' / 'settings.json'
 
 RUFF_ARCH = 'ruff-x86_64-unknown-linux-gnu'
 RUFF_LATEST_URL = 'https://api.github.com/repos/astral-sh/ruff/releases/latest'
@@ -112,7 +112,7 @@ def upload_zed_server():
     zed_old_versions = client.listdir(str(zed_server_dir))
 
     if UNAME_SYSTEM in ['Darwin', 'Linux']:
-        zed_cli = Path(which('zed') or XDG_BIN_HOME / 'zed').resolve()
+        zed_cli = Path(which('zed') or XDG_BIN_HOME / 'zed').expanduser().resolve()
         if not zed_cli.is_file():
             error('Please install the Zed CLI first.')
 
@@ -204,7 +204,7 @@ def run_zed():
     ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
 
-    zed_cli = Path(which('zed') or XDG_BIN_HOME / 'zed')
+    zed_cli = Path(which('zed') or XDG_BIN_HOME / 'zed').expanduser()
     if not zed_cli.is_file():
         error('Please upgrade zed to the latest version and ensure its parent directory is in PATH.')
     if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():

@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
         'purple': '#7b2f8e',
         'black': '#111111'
     },
-    'cookie_path': str(XDG_CACHE_HOME / 'dojo-cli' / 'cookie.json'),
+    'cookie_path': str(XDG_CACHE_HOME.expanduser() / 'dojo-cli' / 'cookie.json'),
     'editor': 'Visual Studio Code',
     'log_styles': {
         'error': 'on red',
@@ -58,11 +58,11 @@ DEFAULT_CONFIG = {
         'HostName': 'dojo.pwn.college',
         'Port': 22,
         'User': 'hacker',
-        'IdentityFile': str(SSH_HOME / 'id_ed25519'),
+        'IdentityFile': str(SSH_HOME.expanduser() / 'id_ed25519'),
         'ServerAliveInterval': 20,
         'ServerAliveCountMax': 3,
-        'config_file': str(SSH_HOME / 'config'),
-        'mount_point': str(XDG_DATA_HOME / 'dojo-cli' / 'mnt'),
+        'config_file': str(SSH_HOME.expanduser() / 'config'),
+        'mount_point': str(XDG_DATA_HOME.expanduser() / 'dojo-cli' / 'mnt'),
         'project_path': '/home/hacker'
     },
     'table': {

@@ -22,7 +22,7 @@ NANOBREW_PREFIX = Path('/opt/nanobrew/prefix')
 if Path('/opt/zerobrew').is_dir() or UNAME_SYSTEM == 'Darwin':
     ZEROBREW_ROOT = Path('/opt/zerobrew')
 else:
-    ZEROBREW_ROOT = XDG_DATA_HOME / 'zerobrew'
+    ZEROBREW_ROOT = XDG_DATA_HOME.expanduser() / 'zerobrew'
 ZEROBREW_PREFIX = ZEROBREW_ROOT if UNAME_SYSTEM == 'Darwin' else ZEROBREW_ROOT / 'prefix'
 
 HOMEBREW_INSTALL_URL = 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
@@ -129,11 +129,11 @@ def uv_install(
     This assumes that uv is installed independently and not with another package manager.
     """
 
-    uv = Path(which('uv') or XDG_BIN_HOME / 'uv')
+    uv = Path(which('uv') or XDG_BIN_HOME / 'uv').expanduser()
     if not uv.is_file():
         info('Installing uv...')
         subprocess.run(requests.get(UV_INSTALL_URL).text, shell=True)
-        uv = Path(which('uv') or XDG_BIN_HOME / 'uv')
+        uv = Path(which('uv') or XDG_BIN_HOME / 'uv').expanduser()
     elif not skip_update:
         subprocess.run([uv, 'self', 'update'])
 
@@ -161,17 +161,17 @@ def wax_install(
     and parallel installation workflows while maintaining full compatibility with Homebrew formulae and bottles.
     """
 
-    cargo = Path(which('cargo') or CARGO_HOME / 'bin' / 'cargo')
+    cargo = Path(which('cargo') or CARGO_HOME / 'bin' / 'cargo').expanduser()
     if not cargo.is_file():
         info('Installing Rust...')
         subprocess.run(requests.get(RUSTUP_INSTALL_URL).text, shell=True)
-        cargo = Path(which('cargo') or CARGO_HOME / 'bin' / 'cargo')
+        cargo = Path(which('cargo') or CARGO_HOME / 'bin' / 'cargo').expanduser()
 
-    wax = Path(which('wax') or CARGO_HOME / 'bin' / 'wax')
+    wax = Path(which('wax') or CARGO_HOME / 'bin' / 'wax').expanduser()
     if not wax.is_file():
         info('Installing Wax...')
         subprocess.run([cargo, 'install', 'waxpkg'])
-        wax = Path(which('wax') or CARGO_HOME / 'bin' / 'wax')
+        wax = Path(which('wax') or CARGO_HOME / 'bin' / 'wax').expanduser()
     elif not skip_update:
         subprocess.run([wax, 'update', '-s'])
 
@@ -196,11 +196,11 @@ def zerobrew_install(
     Zerobrew brings uv-style architecture to Homebrew packages on macOS and Linux.
     """
 
-    zb = Path(which('zb') or XDG_BIN_HOME / 'zb')
+    zb = Path(which('zb') or XDG_BIN_HOME / 'zb').expanduser()
     if not zb.is_file() or not skip_update:
         info('Installing Zerobrew...')
         subprocess.run(requests.get(ZEROBREW_INSTALL_URL).text, shell=True)
-        zb = Path(which('zb') or XDG_BIN_HOME / 'zb')
+        zb = Path(which('zb') or XDG_BIN_HOME / 'zb').expanduser()
 
     if taps:
         # TODO: replace this when zerobrew supports taps
