@@ -11,14 +11,14 @@ from .http import request
 from .challenge import DOJO_IDS
 from .utils import fix_markdown_links
 
-ROOT_LABEL = 'up/down: move, space: toggle, enter: select, ctrl+p: palette, ctrl+q: quit'
+ROOT_LABEL = 'k up/j down: move, space: toggle, enter: select, ctrl+p: palette, ctrl+q: quit'
 ROOT_DESCRIPTION = """
 | Key(s) | Description |
 | :- | :- |
 | enter | Select the current item. |
 | space | Toggle the expand/collapsed state of the current item. |
-| up | Move the cursor up. |
-| down | Move the cursor down. |
+| k/up | Move the cursor up. |
+| j/down | Move the cursor down. |
 """
 
 class DescriptionViewer(MarkdownViewer):
@@ -80,6 +80,14 @@ class StartChallengeModal(ModalScreen):
             self.dismiss()
 
 class TreeApp(App):
+    BINDINGS = [
+        ("k", "cursor_up", "Up"),
+        ("j", "cursor_down", "Down"),
+    ]
+    def action_cursor_up(self) -> None:
+        self.query_one(Tree).action_cursor_up()
+    def action_cursor_down(self) -> None:
+        self.query_one(Tree).action_cursor_down()
     def __init__(
         self,
         dojo_id: Optional[str] = None,
