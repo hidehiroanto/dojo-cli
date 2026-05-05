@@ -6,10 +6,11 @@ import json
 import os
 from pathlib import Path
 from shutil import which
-import requests
 import subprocess
 import tarfile
 import tempfile
+
+import niquests
 import yaml
 
 from .client import get_remote_client
@@ -47,7 +48,7 @@ def install_zed():
             zerobrew_install(casks=['zed'])
         else:
             # This just reinstalls Zed, it's easier than checking GitHub for the latest version
-            subprocess.run(requests.get(ZED_INSTALL_URL).text, shell=True)
+            subprocess.run(niquests.get(ZED_INSTALL_URL).text or '', shell=True)
     elif UNAME_SYSTEM == 'Windows':
         error('Windows is not yet supported.')
     else:
@@ -138,10 +139,10 @@ def upload_zed_server():
         info('Updating zed-remote-server...')
 
         zed_version = zed_semver.split('+')[0]
-        zed_releases = requests.get(ZED_RELEASES_URL).json()
+        zed_releases = niquests.get(ZED_RELEASES_URL).json()
         zed_release = next(release for release in zed_releases if release['tag_name'] == zed_version)
         zed_asset = next(asset for asset in zed_release['assets'] if ZED_ARCH in asset['browser_download_url'])
-        zed_server_data = gzip.decompress(requests.get(zed_asset['browser_download_url']).content)
+        zed_server_data = gzip.decompress(niquests.get(zed_asset['browser_download_url']).content or b'')
 
         # Check if enough disk space is available
         du_query = run_cmd(f'du -bs {home_dir} 2>/dev/null', True) or b'0'
@@ -166,7 +167,7 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
     lang_dir = home_dir / '.local' / 'share' / 'zed' / 'languages'
     client.makedirs(str(lang_dir / lang_server))
     old_versions = client.listdir(str(lang_dir / lang_server))
-    latest = requests.get(latest_url).json()
+    latest = niquests.get(latest_url).json()
 
     info(f'Installed versions of {lang_server}: {old_versions}')
     info(f'Latest version of {lang_server}: [b cyan]{latest['name']}[/]')
@@ -176,7 +177,7 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
 
         lang_server_dir = lang_dir / lang_server / f'{lang_server}-{latest['name']}' / arch
         asset = next(asset for asset in latest['assets'] if arch in asset['browser_download_url'])
-        targz = requests.get(asset['browser_download_url']).content
+        targz = niquests.get(asset['browser_download_url']).content or b''
 
         with tarfile.open(fileobj=BytesIO(targz), mode='r:gz') as tar:
             tar_member = tar.extractfile(tar.getmember(f'{arch}/{lang_server}'))

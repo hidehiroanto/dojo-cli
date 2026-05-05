@@ -1,17 +1,25 @@
 """Handles SensAI."""
 
+from collections import OrderedDict
 import os
 from pathlib import Path
 import re
-from requests import Session
+import shlex
+import socket
+from threading import Lock
+from time import monotonic
+from typing import Optional
+
+from niquests import Session
+from niquests.cookies import create_cookie
 from rich import print as rprint
 from rich.markdown import Markdown as RichMarkdown
-import shlex
 from socketio import SimpleClient
 
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll
 from textual.events import Key
+from textual.timer import Timer
 from textual.widgets import Button, Footer, Input, Markdown, OptionList
 
 from .client import get_remote_client
@@ -19,16 +27,22 @@ from .config import load_user_config
 from .http import load_cookie, request
 from .log import error, fail, info, success, warn
 from .remote import run_cmd
+from .socketio_niquests import SocketIoSession, SocketIoSimpleClient, close_socketio_client
 
-WELCOME_BANNER = r'''
-```
-__        __   _                            _          ____  _____ _   _ ____    _    ___
-\ \      / /__| | ___ ___  _ __ ___   ___  | |_ ___   / ___|| ____| \ | / ___|  / \  |_ _|
- \ \ /\ / / _ \ |/ __/ _ \| '_ ` _ \ / _ \ | __/ _ \  \___ \|  _| |  \| \___ \ / _ \  | |
-  \ V  V /  __/ | (_| (_) | | | | | |  __/ | || (_) |  ___) | |___| |\  |___) / ___ \ | |
-   \_/\_/ \___|_|\___\___/|_| |_| |_|\___|  \__\___/  |____/|_____|_| \_|____/_/   \_\___|
-```
-'''
+WELCOME_BANNER = r'''```
+__        __   _                            _
+\ \      / /__| | ___ ___  _ __ ___   ___  | |_ ___
+ \ \ /\ / / _ \ |/ __/ _ \| '_ ` _ \ / _ \ | __/ _ \
+  \ V  V /  __/ | (_| (_) | | | | | |  __/ | || (_) |
+   \_/\_/ \___|_|\___\___/|_| |_| |_|\___|  \__\___/
+
+    ███████╗███████╗███╗   ██╗███████╗ █████╗ ██╗
+    ██╔════╝██╔════╝████╗  ██║██╔════╝██╔══██╗██║
+    ███████╗█████╗  ██╔██╗ ██║███████╗███████║██║
+    ╚════██║██╔══╝  ██║╚██╗██║╚════██║██╔══██║██║
+    ███████║███████╗██║ ╚████║███████║██║  ██║██║
+    ╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝╚═╝
+```'''
 
 INSTRUCTIONS = r'''
 - Type `!<command>` to execute a remote command and add its output to the terminal context.
@@ -38,23 +52,16 @@ INSTRUCTIONS = r'''
 - Type any of these to quit: `/exit`, `/q`, `/quit`
 '''
 
-def show_welcome(app: App, *argv):
-    app.query_one(VerticalScroll).mount(Markdown(WELCOME_BANNER))
-
-def show_instructions(app: App, *argv):
-    app.query_one(VerticalScroll).mount(Markdown(INSTRUCTIONS))
-
-def exit_app(app: App, *argv):
-    app.exit()
+DEFAULT_SENSAI_TIMEOUT = 60.0
 
 SLASH_COMMANDS = {
-    'exit': exit_app,
-    'h': show_instructions,
-    'help': show_instructions,
-    'q': exit_app,
-    'quit': exit_app,
-    'w': show_welcome,
-    'welcome': show_welcome,
+    'exit': lambda app, *argv: app.exit(),
+    'h': lambda app, *argv: app.query_one(VerticalScroll).mount(Markdown(INSTRUCTIONS)),
+    'help': lambda app, *argv: app.query_one(VerticalScroll).mount(Markdown(INSTRUCTIONS)),
+    'q': lambda app, *argv: app.exit(),
+    'quit': lambda app, *argv: app.exit(),
+    'w': lambda app, *argv: app.query_one(VerticalScroll).mount(Markdown(WELCOME_BANNER)),
+    'welcome': lambda app, *argv: app.query_one(VerticalScroll).mount(Markdown(WELCOME_BANNER)),
 }
 
 class SensaiApp(App):
@@ -78,26 +85,31 @@ class SensaiApp(App):
     """
 
     MAX_OPTIONS = 20
-    HEIGHT_DIFF_THRESHOLD = 6
+    FILE_OPTION_CACHE_RESULT_SIZE = 200
+    FILE_OPTION_CACHE_MIN_RESULTS = 5
+    FILE_OPTION_CACHE_SIZE = 64
+    FILE_OPTION_CACHE_TTL = 30.0
+    FILE_OPTION_FETCH_TIMEOUT = 30.0
+    OPTION_UPDATE_DELAY = 0.15
+    PATH_MATCH_BOUNDARIES = frozenset('/._- ')
 
-    def __init__(self, base_url: str, session_cookie: str):
+    def __init__(self, base_url: str, session_cookie: str, timeout: Optional[float]):
         super().__init__()
         self.base_url = base_url
         self.session_cookie = session_cookie
+        self.timeout = timeout
 
+        self.http_session: Optional[SocketIoSession] = None
+        self.sio: Optional[SocketIoSimpleClient] = None
         self.user_message, self.terminal_context, self.file_context = '', '', ''
 
         self.command_history = []
         self.command_history_index = 0
         self.shell_commands = []
-        self.option_cache = {}
-
-        session = Session()
-        session.cookies.set('session', self.session_cookie)
-        session.get(self.base_url + '/sensai/')
-
-        self.sio = SimpleClient(http_session=session)
-        self.sio.connect(self.base_url, transports=['websocket'], socketio_path='sensai/socket.io')
+        self.option_cache: OrderedDict[str, tuple[float, list[str]]] = OrderedDict()
+        self.option_fetches: set[str] = set()
+        self.option_fetch_lock = Lock()
+        self.option_update_timer: Optional[Timer] = None
         self.remote_client = get_remote_client()
 
     def compose(self) -> ComposeResult:
@@ -109,13 +121,52 @@ class SensaiApp(App):
         yield Footer()
 
     def start_app(self):
-        show_welcome(self)
-        show_instructions(self)
-        self.query_one(Input).focus()
+        self.query_one(VerticalScroll).mount(Markdown(WELCOME_BANNER))
+        self.query_one(VerticalScroll).mount(Markdown(INSTRUCTIONS))
+        self.restore_input()
         self.query_one(OptionList).display = False
 
-    def on_mount(self):
+    def restore_input(self):
+        input_box = self.query_one(Input)
+        input_box.disabled = False
+        input_box.placeholder = 'Enter message'
+        self.set_focus(input_box, scroll_visible=False)
+        self.query_one(Button).disabled = False
+
+    async def connect_sensai(self):
+        self.http_session = SocketIoSession(self.session_cookie)
+        try:
+            response = await self.http_session.get(self.base_url + '/sensai/')
+            await response.read()
+            await response.close()
+            self.sio = SocketIoSimpleClient(http_session=self.http_session)
+            await self.sio.connect(self.base_url, transports=['websocket'], socketio_path='sensai/socket.io')
+        except Exception:
+            await self.disconnect_sensai()
+            raise
+
+    async def disconnect_sensai(self):
+        await close_socketio_client(self.sio, self.http_session)
+        self.sio = None
+        self.http_session = None
+
+    async def on_mount(self) -> None:
+        input_box = self.query_one(Input)
+        input_box.disabled = True
+        input_box.placeholder = 'Connecting to SensAI...'
+        self.query_one(Button).disabled = True
+
+        try:
+            await self.connect_sensai()
+        except Exception as exc:
+            self.exit(return_code=1, message=RichMarkdown(f'**Failed to connect to SensAI:** `{exc}`'))
+            return
+
         self.call_after_refresh(self.start_app)
+
+    async def on_unmount(self) -> None:
+        self.cancel_option_update_timer()
+        await self.disconnect_sensai()
 
     def add_file_context(self, filenames: list[str]):
         for filename in filenames:
@@ -175,32 +226,39 @@ class SensaiApp(App):
         input_box.focus()
 
     async def emit_and_receive_event(self):
-        self.add_file_context(re.findall(r'@(\S+)', self.user_message))
-        content = {'message': self.user_message, 'terminal': self.terminal_context, 'file': self.file_context}
-        self.sio.emit('new_interaction', {'type': 'learner', 'content': content})
-        self.user_message, self.terminal_context, self.file_context = '', '', ''
-
-        event = self.sio.receive()
-        if event[0] == 'new_interaction':
-            assistant_message = event[1]['content']['message']
-        elif event[0] == 'user_rate_limit':
-            remaining = max([limit['remaining'] for limit in event[1] if limit['remaining'] is not None] + [0])
-            assistant_message = f'User rate limit: Please wait {remaining} seconds before sending your message.'
-        else:
-            assistant_message = f'Unknown event: {event}'
+        if self.sio is None:
+            self.restore_input()
+            return
 
         vertical_scroll = self.query_one(VerticalScroll)
-        await vertical_scroll.mount(Markdown(f'**SensAI:** {assistant_message}'))
-        vertical_scroll.scroll_end()
+        try:
+            self.add_file_context(re.findall(r'@(\S+)', self.user_message))
+            content = {'message': self.user_message, 'terminal': self.terminal_context, 'file': self.file_context}
+            await self.sio.emit('new_interaction', {'type': 'learner', 'content': content})
+            self.user_message, self.terminal_context, self.file_context = '', '', ''
 
-        self.query_one(Button).disabled = False
-        input_box = self.query_one(Input)
-        input_box.disabled = False
-        input_box.placeholder = 'Enter message'
-        input_box.focus()
+            event = await self.sio.receive(timeout=self.timeout)
+            if event[0] == 'new_interaction':
+                assistant_message = event[1]['content']['message']
+            elif event[0] == 'user_rate_limit':
+                remaining = max([limit['remaining'] for limit in event[1] if limit['remaining'] is not None] + [0])
+                assistant_message = f'User rate limit: Please wait {remaining} seconds before sending your message.'
+            else:
+                assistant_message = f'Unknown event: {event}'
+
+            await vertical_scroll.mount(Markdown(f'**SensAI:** {assistant_message}'))
+        except TimeoutError:
+            timeout_message = 'No response received.' if self.timeout is None else f'No response after {self.timeout:g} seconds.'
+            await vertical_scroll.mount(Markdown(f'**SensAI timeout:** {timeout_message}'))
+        except Exception as exc:
+            await vertical_scroll.mount(Markdown(f'**SensAI connection error:** `{exc}`'))
+        finally:
+            vertical_scroll.scroll_end()
+            self.restore_input()
 
     async def submit_input(self, input_box: Input):
         if self.user_message:
+            self.cancel_option_update_timer()
             input_box.clear()
             vertical_scroll = self.query_one(VerticalScroll)
             option_list = self.query_one(OptionList)
@@ -236,26 +294,64 @@ class SensaiApp(App):
                 self.query_one(Button).disabled = True
                 input_box.disabled = True
                 input_box.placeholder = 'Waiting...'
-                if vertical_scroll.virtual_size.height - vertical_scroll.scrollable_size.height > self.HEIGHT_DIFF_THRESHOLD:
-                    vertical_scroll.scroll_end(on_complete=self.run_shell_cmd)
-                else:
-                    self.call_after_refresh(self.run_shell_cmd)
+                self.set_focus(vertical_scroll, scroll_visible=False)
+                vertical_scroll.call_after_refresh(
+                    lambda: vertical_scroll.scroll_to(
+                        y=vertical_scroll.max_scroll_y,
+                        animate=True,
+                    )
+                )
+                self.call_after_refresh(
+                    lambda: self.run_worker(
+                        self.run_shell_cmd(),
+                        name='sensai-shell',
+                        group='sensai-shell',
+                        exclusive=True,
+                        exit_on_error=False,
+                    )
+                )
 
             else:
                 await vertical_scroll.mount(Markdown(f'**You:** {re.sub(r'@(\S+)', r'`@\1`', self.user_message)}'))
                 self.query_one(Button).disabled = True
                 input_box.disabled = True
-                input_box.placeholder = 'Waiting...'
-                if vertical_scroll.virtual_size.height - vertical_scroll.scrollable_size.height > self.HEIGHT_DIFF_THRESHOLD:
-                    vertical_scroll.scroll_end(on_complete=self.emit_and_receive_event)
-                else:
-                    self.call_after_refresh(self.emit_and_receive_event)
+                input_box.placeholder = 'Waiting...' if self.timeout is None else f'Waiting up to {self.timeout:g}s...'
+                self.set_focus(vertical_scroll, scroll_visible=False)
+                vertical_scroll.call_after_refresh(
+                    lambda: vertical_scroll.scroll_to(
+                        y=vertical_scroll.max_scroll_y,
+                        animate=True,
+                    )
+                )
+                self.call_after_refresh(
+                    lambda: self.run_worker(
+                        self.emit_and_receive_event(),
+                        name='sensai-response',
+                        group='sensai-response',
+                        exclusive=True,
+                        exit_on_error=False,
+                    )
+                )
 
-    def update_option_list(self):
-        input_box = self.query_one(Input)
+    def get_file_query_at_cursor(self, value: str, cursor_position: int) -> Optional[str]:
+        for match in re.finditer(r'@\S{3,}', value):
+            span = match.span()
+            if span[0] <= cursor_position <= span[1]:
+                return value[span[0] + 1:span[1]].casefold()
+        return None
+
+    def show_option_list(self, new_options: list[str]):
         option_list = self.query_one(OptionList)
         option_list.clear_options()
         option_list.display = False
+        if new_options:
+            option_list.add_options(new_options)
+            option_list.display = True
+            option_list.highlighted = 0
+
+    def update_option_list(self):
+        input_box = self.query_one(Input)
+        self.show_option_list([])
         new_options = []
 
         if input_box.value.startswith('/'):
@@ -275,31 +371,170 @@ class SensaiApp(App):
                     new_options.append(f'!{cmd}')
 
         else:
-            for span in list(match.span() for match in re.finditer(r'@\S{3,}', input_box.value)):
-                if span[0] <= input_box.cursor_position <= span[1]:
-                    file_query = input_box.value[span[0] + 1:span[1]]
-                    file_query_casefold = file_query.casefold()
-                    break
-            else:
+            file_query_casefold = self.get_file_query_at_cursor(input_box.value, input_box.cursor_position)
+            if file_query_casefold is None:
                 return
 
-            if file_query_casefold not in self.option_cache:
-                fd_args = ['fd', '-apu', '-tf', '-E', '/nix', '-E', '/sys', '.', '/']
-                fzf_args = ['fzf', '-f', file_query_casefold]
-                head_args = ['head', '-n', str(self.MAX_OPTIONS)]
-                command = ' | '.join(map(shlex.join, [fd_args, fzf_args, head_args]))
-                command_stdout = self.remote_client.ssh.exec_command(command)[1].read()
-                self.option_cache[file_query_casefold] = command_stdout.decode().splitlines()
+            new_options = self.get_cached_file_options(file_query_casefold, require_min_results=False)
+            if new_options is None:
+                self.request_file_options(file_query_casefold)
+                return
+            if len(new_options) < self.FILE_OPTION_CACHE_MIN_RESULTS:
+                self.request_file_options(file_query_casefold)
 
-            new_options = self.option_cache[file_query_casefold]
+        self.show_option_list(new_options)
 
-        if new_options:
-            option_list.add_options(new_options)
-            option_list.display = True
-            option_list.highlighted = 0
+    def is_file_option_cache_fresh(self, cached_at: float) -> bool:
+        return monotonic() - cached_at <= self.FILE_OPTION_CACHE_TTL
+
+    def get_fuzzy_match_positions(self, query: str, candidate: str) -> Optional[list[int]]:
+        positions = []
+        start = 0
+        for char in query:
+            position = candidate.find(char, start)
+            if position < 0:
+                return None
+            positions.append(position)
+            start = position + 1
+        return positions
+
+    def is_fuzzy_match(self, query: str, candidate: str) -> bool:
+        return self.get_fuzzy_match_positions(query, candidate.casefold()) is not None
+
+    def get_file_option_rank(self, query: str, option: str) -> Optional[tuple[int, int, int, int, int, int, int, int]]:
+        option_casefold = option.casefold()
+        positions = self.get_fuzzy_match_positions(query, option_casefold)
+        if positions is None:
+            return None
+
+        query_basename = query.rsplit('/', 1)[-1]
+        option_basename = option_casefold.rsplit('/', 1)[-1]
+        substring_position = option_casefold.find(query)
+        basename_substring_position = option_basename.find(query_basename) if query_basename else -1
+        contiguous_position = min(
+            (
+                position for position in [substring_position, basename_substring_position]
+                if position >= 0
+            ),
+            default=-1,
+        )
+        boundary_matches = sum(
+            1 for position in positions
+            if position == 0 or option_casefold[position - 1] in self.PATH_MATCH_BOUNDARIES
+        )
+
+        return (
+            int(not option_casefold.startswith(query)),
+            int(not (query_basename and option_basename.startswith(query_basename))),
+            int(contiguous_position < 0),
+            -boundary_matches,
+            contiguous_position if contiguous_position >= 0 else positions[0],
+            positions[-1] - positions[0],
+            len(option_casefold),
+            positions[0],
+        )
+
+    def get_ranked_file_options(self, query: str, options: list[str]) -> list[str]:
+        ranked_options = [
+            (rank, option)
+            for option in options
+            if (rank := self.get_file_option_rank(query, option)) is not None
+        ]
+        ranked_options.sort(key=lambda item: item[0])
+        return [option for _, option in ranked_options]
+
+    def get_visible_file_options(self, options: list[str]) -> list[str]:
+        return options[:self.MAX_OPTIONS]
+
+    def get_cached_file_options(self, query: str, require_min_results: bool = True) -> Optional[list[str]]:
+        cached = self.option_cache.get(query)
+        if cached:
+            cached_at, options = cached
+            if self.is_file_option_cache_fresh(cached_at):
+                self.option_cache.move_to_end(query)
+                return self.get_visible_file_options(options)
+            self.option_cache.pop(query)
+
+        for cached_query, (cached_at, options) in reversed(list(self.option_cache.items())):
+            is_refinement = query.startswith(cached_query)
+            is_backtrack = cached_query.startswith(query)
+            if (is_refinement or is_backtrack) and self.is_file_option_cache_fresh(cached_at):
+                self.option_cache.move_to_end(cached_query)
+                filtered_options = self.get_ranked_file_options(query, options)
+                if len(filtered_options) >= self.FILE_OPTION_CACHE_MIN_RESULTS or (
+                    filtered_options and not require_min_results
+                ):
+                    if is_refinement:
+                        self.cache_file_options(query, filtered_options)
+                    return self.get_visible_file_options(filtered_options)
+        return None
+
+    def cache_file_options(self, query: str, options: list[str]):
+        self.option_cache[query] = (monotonic(), options[:self.FILE_OPTION_CACHE_RESULT_SIZE])
+        self.option_cache.move_to_end(query)
+        while len(self.option_cache) > self.FILE_OPTION_CACHE_SIZE:
+            self.option_cache.popitem(last=False)
+
+    def fetch_file_options(self, query: str, use_path_scheme: bool = True) -> Optional[list[str]]:
+        fd_args = ['fd', '-apu', '-tf', '-E', '/nix', '-E', '/sys', '.', '/']
+        fzf_args = ['fzf', '-f', query]
+        if use_path_scheme:
+            fzf_args.insert(1, '--scheme=path')
+        head_args = ['head', '-n', str(self.FILE_OPTION_CACHE_RESULT_SIZE)]
+        command = ' | '.join(map(shlex.join, [fd_args, fzf_args, head_args]))
+        try:
+            with self.option_fetch_lock:
+                _, command_stdout, command_stderr = self.remote_client.ssh.exec_command(command, timeout=self.FILE_OPTION_FETCH_TIMEOUT)
+                try:
+                    options = command_stdout.read().decode().splitlines()
+                    stderr = command_stderr.read().decode(errors='replace').casefold()
+                finally:
+                    command_stdout.channel.close()
+        except (OSError, TimeoutError, socket.timeout):
+            return None
+        if use_path_scheme and not options and ('unknown option' in stderr or 'invalid option' in stderr):
+            return self.fetch_file_options(query, use_path_scheme=False)
+        return options
+
+    def finish_file_options(self, query: str, options: Optional[list[str]]):
+        self.option_fetches.discard(query)
+        if options is None:
+            return
+
+        self.cache_file_options(query, options)
+        input_box = self.query_one(Input)
+        current_query = self.get_file_query_at_cursor(input_box.value, input_box.cursor_position)
+        if current_query != query:
+            return
+
+        self.show_option_list(self.get_visible_file_options(options))
+
+    def load_file_options(self, query: str):
+        options = self.fetch_file_options(query)
+        self.call_from_thread(self.finish_file_options, query, options)
+
+    def request_file_options(self, query: str):
+        if query in self.option_fetches:
+            return
+
+        self.option_fetches.add(query)
+        self.run_worker(
+            lambda: self.load_file_options(query),
+            name='sensai-options',
+            group='sensai-options',
+            exclusive=False,
+            exit_on_error=False,
+            thread=True,
+        )
+
+    def cancel_option_update_timer(self):
+        if self.option_update_timer:
+            self.option_update_timer.stop()
+            self.option_update_timer = None
 
     def on_input_changed(self, event: Input.Changed):
-        self.update_option_list()
+        self.cancel_option_update_timer()
+        self.option_update_timer = self.set_timer(self.OPTION_UPDATE_DELAY, self.update_option_list)
 
     def select_option(self):
         input_box = self.query_one(Input)
@@ -368,9 +603,9 @@ class SensaiApp(App):
         self.user_message = input_box.value
         await self.submit_input(input_box)
 
-def run_simple(base_url: str, session_cookie: str):
+def run_simple(base_url: str, session_cookie: str, timeout: Optional[float]):
     with Session() as session:
-        session.cookies.set('session', session_cookie)
+        session.cookies.set_cookie(create_cookie('session', session_cookie))
         session.get(base_url + '/sensai/')
         with SimpleClient(http_session=session) as sio, get_remote_client() as remote_client:
             sio.connect(base_url, transports=['websocket'], socketio_path='sensai/socket.io')
@@ -435,7 +670,13 @@ def run_simple(base_url: str, session_cookie: str):
                     terminal_context, file_context = '', ''
                     info('Waiting for SensAI response...')
 
-                    event = sio.receive()
+                    try:
+                        event = sio.receive(timeout=timeout)
+                    except TimeoutError:
+                        if timeout is None:
+                            fail('SensAI did not respond.')
+                        else:
+                            fail(f'SensAI timed out after {timeout:g} seconds.')
                     if event[0] == 'new_interaction':
                         success('SensAI response:')
                         rprint(RichMarkdown(event[1]['content']['message']))
@@ -447,7 +688,7 @@ def run_simple(base_url: str, session_cookie: str):
                         warn('SensAI response:')
                         rprint(RichMarkdown(f'Unknown event: {event}'))
 
-def init_sensai(simple: bool = False):
+def init_sensai(simple: bool = False, timeout: float = DEFAULT_SENSAI_TIMEOUT):
     if not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
 
@@ -463,8 +704,9 @@ def init_sensai(simple: bool = False):
         error('Invalid cookie.')
         return
 
+    sensai_timeout = None if timeout <= 0 else timeout
     if simple:
-        run_simple(base_url, cookie_jar['session'])
+        run_simple(base_url, cookie_jar['session'], sensai_timeout)
     else:
-        app = SensaiApp(base_url, cookie_jar['session'])
+        app = SensaiApp(base_url, cookie_jar['session'], sensai_timeout)
         app.run()

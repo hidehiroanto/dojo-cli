@@ -202,6 +202,7 @@ class CustomCommandForm(CommandForm):
                         if options:
                             yield Label('Options', classes='command-form-heading')
                             for option in options:
+                                assert isinstance(option.key, str)
                                 controls = CustomParameterControls(option, id=option.key)
                                 if self.first_control is None:
                                     self.first_control = controls

@@ -1,6 +1,7 @@
 """Utility functions for the pwn.college dojo CLI."""
 
 from cairosvg import svg2png
+from functools import lru_cache
 from io import BytesIO
 import os
 import re
@@ -54,9 +55,15 @@ def can_render_image():
         return True
     return issubclass(Image, (SixelImage, TGPImage))
 
+@lru_cache(maxsize=128)
+def download_image_bytes(url: str) -> bytes:
+    if url.endswith('.svg'):
+        return svg2png(url=url)
+    return request(url, False, False).content
+
 def download_image(url: str, height: int = 1):
     base_url = load_user_config()['base_url']
     if not (url.startswith('http://') or url.startswith('https://')):
         url = base_url + url
-    image = svg2png(url=url) if url.endswith('.svg') else request(url, False, False).content
+    image = download_image_bytes(url)
     return Image(BytesIO(image), 'auto', height)

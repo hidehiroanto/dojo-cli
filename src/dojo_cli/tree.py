@@ -89,6 +89,8 @@ class TreeApp(App):
         official: bool = False
     ):
         super().__init__()
+        self.auth = auth
+        self.loaded_modules: set[str] = set()
         dojos = request('/dojos', auth=auth).json().get('dojos')
         sorted_dojos = sorted(filter(lambda dojo: dojo['id'] in DOJO_IDS, dojos), key=lambda dojo: DOJO_IDS.index(dojo['id']))
         sorted_dojos += sorted(filter(lambda dojo: dojo['id'] not in DOJO_IDS, dojos), key=lambda dojo: dojo['id'])
@@ -99,11 +101,6 @@ class TreeApp(App):
                 sorted_dojos = filter(lambda dojo: dojo['official'], sorted_dojos)
             for dojo in sorted_dojos:
                 self.data[dojo['id']] = {'data': dojo, 'modules': {}}
-                modules = request(f'/dojos/{dojo['id']}/modules', auth=auth).json().get('modules')
-                for module in modules:
-                    self.data[dojo['id']]['modules'][module['id']] = {'data': module, 'unified_items': {}}
-                    for item in module['unified_items']:
-                        self.data[dojo['id']]['modules'][module['id']]['unified_items'][item['id']] = {'data': item}
 
         elif not module_id:
             dojo = next(filter(lambda dojo: dojo['id'] == dojo_id, sorted_dojos))
@@ -113,6 +110,7 @@ class TreeApp(App):
                 self.data[dojo['id']]['modules'][module['id']] = {'data': module, 'unified_items': {}}
                 for item in module['unified_items']:
                     self.data[dojo['id']]['modules'][module['id']]['unified_items'][item['id']] = {'data': item}
+            self.loaded_modules.add(dojo_id)
 
         elif not challenge_id:
             dojo = next(filter(lambda dojo: dojo['id'] == dojo_id, sorted_dojos))
@@ -122,6 +120,7 @@ class TreeApp(App):
             self.data[dojo['id']]['modules'][module['id']] = {'data': module, 'unified_items': {}}
             for item in module['unified_items']:
                 self.data[dojo['id']]['modules'][module['id']]['unified_items'][item['id']] = {'data': item}
+            self.loaded_modules.add(dojo_id)
 
         else:
             dojo = next(filter(lambda dojo: dojo['id'] == dojo_id, sorted_dojos))
@@ -132,38 +131,62 @@ class TreeApp(App):
             for item in module['unified_items']:
                 if item['item_type'] == 'resource' or item['item_type'] == 'challenge' and item['id'] == challenge_id:
                     self.data[dojo['id']]['modules'][module['id']]['unified_items'][item['id']] = {'data': item}
+            self.loaded_modules.add(dojo_id)
+
+    def add_module_node(self, dojo_node, dojo_id: str, module_id: str, module: dict):
+        module_node = dojo_node.add(Text(f'Module: {module['data']['name']}', 'markdown.h2'), module['data'])
+        for item_id, item in module['unified_items'].items():
+            if item['data']['item_type'] == 'resource':
+                if item['data']['type'] == 'header':
+                    module_node.add_leaf(Text(item['data']['content'], 'markdown.h3'))
+                elif item['data']['type'] == 'lecture':
+                    item['data']['description'] = ''
+                    if item['data'].get('video'):
+                        youtube_url = f'https://www.youtube.com/watch?v={item['data']['video']}'
+                        if item['data'].get('playlist'):
+                            youtube_url += f'&list={item['data']['playlist']}'
+                        item['data']['description'] += f'Video: [{youtube_url}]({youtube_url})\n\n'
+                    if item['data'].get('slides'):
+                        slides_url = f'https://docs.google.com/presentation/d/{item['data']['slides']}/embed'
+                        item['data']['description'] += f'Slides: [{slides_url}]({slides_url})\n\n'
+                    module_node.add_leaf(f'Lecture: {item['data']['name']}', item['data'])
+                elif item['data']['type'] == 'markdown':
+                    item['data']['description'] = item['data']['content']
+                    module_node.add_leaf(f'Resource: {item['data']['name']}', item['data'])
+            elif item['data']['item_type'] == 'challenge':
+                item['data'].update({'dojo': dojo_id, 'module': module_id, 'challenge': item_id})
+                challenge_node = module_node.add(f'Challenge: {item['data']['name']}', item['data'])
+                challenge_node.add_leaf('Start Challenge', item['data'])
+                # TODO: disable privileged mode if not available
+                challenge_node.add_leaf('Start Challenge in Privileged Mode', item['data'])
+
+    def load_dojo_modules(self, dojo_node):
+        dojo_data = dojo_node.data
+        if not dojo_data:
+            return
+        dojo_id = dojo_data['id']
+        if dojo_id in self.loaded_modules:
+            return
+        modules = request(f'/dojos/{dojo_id}/modules', auth=self.auth).json().get('modules')
+        for module in modules:
+            module_data = {'data': module, 'unified_items': {}}
+            for item in module['unified_items']:
+                module_data['unified_items'][item['id']] = {'data': item}
+            self.data[dojo_id]['modules'][module['id']] = module_data
+            self.add_module_node(dojo_node, dojo_id, module['id'], module_data)
+        self.loaded_modules.add(dojo_id)
 
     def compose(self) -> ComposeResult:
         tree = Tree(ROOT_LABEL, {'description': ROOT_DESCRIPTION})
         tree.root.expand()
         for dojo_id, dojo in self.data.items():
-            dojo_node = tree.root.add(Text(f'Dojo: {dojo['data']['name']}', 'markdown.h1'), dojo['data'])
+            dojo_node = tree.root.add(
+                Text(f'Dojo: {dojo['data']['name']}', 'markdown.h1'),
+                dojo['data'],
+                allow_expand=bool(dojo['modules']) or dojo['data'].get('modules_count', 0) > 0
+            )
             for module_id, module in dojo['modules'].items():
-                module_node = dojo_node.add(Text(f'Module: {module['data']['name']}', 'markdown.h2'), module['data'])
-                for item_id, item in module['unified_items'].items():
-                    if item['data']['item_type'] == 'resource':
-                        if item['data']['type'] == 'header':
-                            module_node.add_leaf(Text(item['data']['content'], 'markdown.h3'))
-                        elif item['data']['type'] == 'lecture':
-                            item['data']['description'] = ''
-                            if item['data'].get('video'):
-                                youtube_url = f'https://www.youtube.com/watch?v={item['data']['video']}'
-                                if item['data'].get('playlist'):
-                                    youtube_url += f'&list={item['data']['playlist']}'
-                                item['data']['description'] += f'Video: [{youtube_url}]({youtube_url})\n\n'
-                            if item['data'].get('slides'):
-                                slides_url = f'https://docs.google.com/presentation/d/{item['data']['slides']}/embed'
-                                item['data']['description'] += f'Slides: [{slides_url}]({slides_url})\n\n'
-                            module_node.add_leaf(f'Lecture: {item['data']['name']}', item['data'])
-                        elif item['data']['type'] == 'markdown':
-                            item['data']['description'] = item['data']['content']
-                            module_node.add_leaf(f'Resource: {item['data']['name']}', item['data'])
-                    elif item['data']['item_type'] == 'challenge':
-                        item['data'].update({'dojo': dojo_id, 'module': module_id, 'challenge': item_id})
-                        challenge_node = module_node.add(f'Challenge: {item['data']['name']}', item['data'])
-                        challenge_node.add_leaf('Start Challenge', item['data'])
-                        # TODO: disable privileged mode if not available
-                        challenge_node.add_leaf('Start Challenge in Privileged Mode', item['data'])
+                self.add_module_node(dojo_node, dojo_id, module_id, module)
 
         with Horizontal():
             yield tree
@@ -178,6 +201,10 @@ class TreeApp(App):
         if event.node.data and event.node.data.get('description'):
             description = fix_markdown_links(event.node.data['description'])
         self.query_one(DescriptionViewer).query_one(Markdown).update(description)
+
+    def on_tree_node_expanded(self, event: Tree.NodeExpanded):
+        if event.node.data and event.node.data.get('modules_count') is not None:
+            self.load_dojo_modules(event.node)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected):
         node_label = str(event.node.label)

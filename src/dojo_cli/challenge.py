@@ -12,7 +12,6 @@ from typing import Optional
 from .client import get_remote_client
 from .http import request
 from .log import error, fail, info, success, warn
-from .remote import run_cmd
 from .terminal import apply_style
 from .utils import can_render_image, download_image, fix_markdown_links, get_belt_hex, show_table
 
@@ -288,21 +287,11 @@ def restart_challenge(normal: bool = False, privileged: bool = False):
     init_challenge(normal=normal, privileged=privileged)
 
 def stop_challenge():
-    docker_response = request('/docker').json()
+    docker_response = request('/docker', csrf=True, method='DELETE', json={}).json()
     if docker_response.get('success'):
-        if not docker_response.get('practice'):
-            chal_data = {'dojo': 'welcome', 'module': 'welcome', 'challenge': 'practice', 'practice': True}
-            docker_response = request('/docker', csrf=True, json=chal_data).json()
-            if not docker_response.get('success'):
-                error(docker_response.get('error', 'Something went wrong.'))
-        run_cmd('sudo kill 1', True)
-        docker_response = request('/docker').json()
-        if not docker_response.get('success'):
-            success('Challenge stopped successfully!')
-        else:
-            error('Challenge stopped unsuccessfully.')
+        success(docker_response.get('message', 'Challenge stopped successfully!'))
     else:
-        error('No active challenge session; start a challenge!')
+        error(docker_response.get('error', 'Challenge stopped unsuccessfully.'))
 
 def show_status():
     docker_response = request('/docker').json()

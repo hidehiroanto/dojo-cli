@@ -192,7 +192,17 @@ def run_paramiko(
     pty: bool = True
 ) -> Optional[bytes]:
     with get_remote_client().get_channel() as channel:
-        if pty:
+        try:
+            stdin_fd = sys.stdin.fileno()
+        except (AttributeError, OSError, ValueError):
+            stdin_fd = None
+
+        try:
+            stdin_is_tty = stdin_fd is not None and sys.stdin.isatty()
+        except (OSError, ValueError):
+            stdin_is_tty = False
+
+        if pty and stdin_is_tty:
             try:
                 channel.get_pty(DEFAULT_TERM, *os.get_terminal_size())
             except OSError:
@@ -226,16 +236,22 @@ def run_paramiko(
                 channel.recv(len(payload) + payload.count(b'\n'))
                 output = b''
 
-        oldtty = termios.tcgetattr(sys.stdin)
+        oldtty = None
         try:
             if not capture_output:
                 success('Connected!')
-            tty.setraw(sys.stdin.fileno())
-            tty.setcbreak(sys.stdin.fileno())
+            if stdin_is_tty and stdin_fd is not None:
+                oldtty = termios.tcgetattr(stdin_fd)
+                tty.setraw(stdin_fd)
+                tty.setcbreak(stdin_fd)
             channel.settimeout(0.0)
 
+            rlist_sources = [channel]
+            if not capture_output and stdin_fd is not None:
+                rlist_sources.append(sys.stdin)
+
             while True:
-                rlist = select.select([channel, sys.stdin], [], [])[0]
+                rlist = select.select(rlist_sources, [], [])[0]
                 if channel in rlist:
                     try:
                         buffer = channel.recv(BUFFER_SIZE)
@@ -249,12 +265,21 @@ def run_paramiko(
                     except TimeoutError:
                         pass
                 if sys.stdin in rlist:
-                    buffer = os.read(sys.stdin.fileno(), BUFFER_SIZE)
+                    assert stdin_fd is not None
+                    buffer = os.read(stdin_fd, BUFFER_SIZE)
                     if not buffer:
-                        break
+                        if stdin_is_tty:
+                            break
+                        rlist_sources.remove(sys.stdin)
+                        try:
+                            channel.shutdown_write()
+                        except (AttributeError, OSError):
+                            pass
+                        continue
                     channel.sendall(buffer)
         finally:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
+            if oldtty is not None and stdin_fd is not None:
+                termios.tcsetattr(stdin_fd, termios.TCSADRAIN, oldtty)
 
         if capture_output:
             return output

@@ -37,8 +37,14 @@ class RemoteClient(fuse.Operations):
         return self
 
     def __exit__(self, exc_type, exc_val, traceback):
+        self.close()
+
+    def close(self):
+        global remote_client
         self.sftp.close()
         self.ssh.close()
+        if remote_client is self:
+            remote_client = None
 
     @fuse.overrides(fuse.Operations)
     def chmod(self, path: str, mode: int) -> int:
@@ -56,8 +62,7 @@ class RemoteClient(fuse.Operations):
 
     @fuse.overrides(fuse.Operations)
     def destroy(self, path: str) -> None:
-        self.sftp.close()
-        self.ssh.close()
+        self.close()
 
     def get(self, remotepath: str, localpath: str):
         self.sftp.get(remotepath, localpath)

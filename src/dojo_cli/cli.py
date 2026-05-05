@@ -10,47 +10,9 @@ from typing import Annotated, Optional
 from cyclopts import App, Group, Parameter, validators
 from cyclopts.types import ResolvedDirectory, ResolvedExistingFile, ResolvedPath
 
-from .challenge import (
-    init_challenge,
-    init_next,
-    init_previous,
-    restart_challenge,
-    show_hint,
-    show_list,
-    show_status,
-    stop_challenge,
-    submit_flag
-)
-from .config import DEFAULT_CONFIG_PATH, show_config
-from .editor import init_editor, mount_remote, unmount_remote
-from .log import info
-from .remote import (
-    bat_file,
-    download_file,
-    edit_path,
-    print_file,
-    run_cmd,
-    ssh_keygen,
-    upload_file
-)
-from .sensai import init_sensai
-from .shell import init_bash, init_fish, init_nu, init_zsh
-from .terminal import apply_style
-from .tree import init_tree
-from .tui import init_trogon
-from .user import (
-    change_settings,
-    do_login,
-    do_logout,
-    do_register,
-    show_activity,
-    show_belts,
-    show_me,
-    show_score,
-    show_scoreboard
-)
-from .video import init_twitch, init_youtube
-from .zed import init_zed
+from .config import DEFAULT_CONFIG_PATH
+
+DEFAULT_SENSAI_TIMEOUT = 60.0
 
 app = App(
     name='dojo',
@@ -80,6 +42,7 @@ def register(*,
         email (Optional[str]): Email
         password (Optional[str]): Password
     """
+    from .user import do_register
     do_register(username, email, password)
 
 @app.command(group=user_login)
@@ -94,21 +57,25 @@ def login(*,
         username (Optional[str]): Username or email
         password (Optional[str]): Password
     """
+    from .user import do_login
     do_login(username, password)
 
 @app.command(group=user_login)
 def logout():
     """Log out of your pwn.college account by deleting session cookie from the cache."""
+    from .user import do_logout
     do_logout()
 
 @app.command(group=user_login)
 def settings():
     """Change the settings of your pwn.college account."""
+    from .user import change_settings
     change_settings()
 
 @app.command(group=user_login)
 def keygen():
     """Generate an SSH key for the dojo and add it to user settings."""
+    from .remote import ssh_keygen
     ssh_keygen()
 
 user_info = Group.create_ordered('User Info')
@@ -121,6 +88,7 @@ def whoami(*, simple: Annotated[bool, Parameter(alias='-s')] = False):
     Args:
         simple (bool): Disable images
     """
+    from .user import show_me
     show_me(simple)
 
 @app.command(alias=('rank', 'score'), group=user_info)
@@ -131,6 +99,7 @@ def whois(*, username: Annotated[Optional[str], Parameter(alias='-u')] = None):
     Args:
         username (Optional[str]): Username to query
     """
+    from .user import show_score
     show_score(username)
 
 @app.command(group=user_info)
@@ -141,6 +110,7 @@ def activity(*, user_id: Annotated[Optional[int], Parameter(name='--id', alias='
     Args:
         user_id (Optional[int]): User ID
     """
+    from .user import show_activity
     show_activity(user_id)
 
 @app.command(group=user_info)
@@ -161,6 +131,7 @@ def scoreboard(*,
         page (int): Scoreboard page number
         simple (bool): Disable images
     """
+    from .user import show_scoreboard
     show_scoreboard(dojo_id, module_id, duration, page, simple)
 
 @app.command(group=user_info)
@@ -177,6 +148,7 @@ def belts(*,
         page (Optional[int]): Belt list page number
         simple (bool): Disable images
     """
+    from .user import show_belts
     show_belts(belt, page, simple)
 
 challenge_info = Group.create_ordered('Challenge Info')
@@ -201,6 +173,7 @@ def ls(*,
         official (bool): Filter to official dojos
         simple (bool): Disable images
     """
+    from .challenge import show_list
     show_list(dojo_id, module_id, challenge_id, auth, official, simple)
 
 @app.command(group=challenge_info)
@@ -221,6 +194,7 @@ def tree(*,
         auth (bool): Authenticate to display hidden dojos
         official (bool): Filter to official dojos
     """
+    from .tree import init_tree
     init_tree(dojo_id, module_id, challenge_id, auth, official)
 
 video_playback = Group.create_ordered('Video Streaming and Playback')
@@ -228,6 +202,7 @@ video_playback = Group.create_ordered('Video Streaming and Playback')
 @app.command(alias='ttv', group=video_playback)
 def twitch():
     """Play the pwn.college live stream on Twitch."""
+    from .video import init_twitch
     init_twitch()
 
 @app.command(alias='yt', group=video_playback)
@@ -252,6 +227,7 @@ def youtube(*,
         page (Optional[int]): YouTube feed page number
         simple (bool): Disable thumbnails
     """
+    from .video import init_youtube
     init_youtube(video_id, playlist_id, dojo_id, module_id, resource_id, page, simple)
 
 challenge_launch = Group.create_ordered('Challenge Launch')
@@ -281,6 +257,7 @@ def start(*,
         normal (bool): Start in normal mode
         privileged (bool): Start in privileged mode
     """
+    from .challenge import init_challenge
     init_challenge(dojo_id, module_id, challenge_id, normal, privileged)
 
 @app.command(name='next', group=challenge_launch)
@@ -295,6 +272,7 @@ def start_next(*,
         normal (bool): Start in normal mode.
         privileged (bool): Start in privileged mode.
     """
+    from .challenge import init_next
     init_next(normal, privileged)
 
 @app.command(alias='prev', group=challenge_launch)
@@ -309,6 +287,7 @@ def previous(*,
         normal (bool): Start in normal mode.
         privileged (bool): Start in privileged mode.
     """
+    from .challenge import init_previous
     init_previous(normal, privileged)
 
 @app.command(group=challenge_launch)
@@ -323,11 +302,13 @@ def restart(*,
         normal (bool): Restart in normal mode.
         privileged (bool): Restart in privileged mode.
     """
+    from .challenge import restart_challenge
     restart_challenge(normal, privileged)
 
 @app.command(group=challenge_launch)
 def stop():
     """Stop the current challenge."""
+    from .challenge import stop_challenge
     stop_challenge()
 
 challenge_status = Group.create_ordered('Challenge Status')
@@ -335,6 +316,7 @@ challenge_status = Group.create_ordered('Challenge Status')
 @app.command(alias='ps', group=challenge_status)
 def status():
     """Show the status of the current challenge."""
+    from .challenge import show_status
     show_status()
 
 remote_connection = Group.create_ordered('Remote Connection')
@@ -342,6 +324,7 @@ remote_connection = Group.create_ordered('Remote Connection')
 @app.command(group=remote_connection)
 def connect():
     """Connect to the current challenge via an interactive remote shell (bash by default)."""
+    from .remote import run_cmd
     run_cmd()
 
 @app.command(group=remote_connection)
@@ -352,6 +335,7 @@ def bash(*, command_string: Annotated[Optional[str], Parameter(name='-c')] = Non
     Args:
         command_string (Optional[str]): Run the given command and then exit.
     """
+    from .shell import init_bash
     init_bash(command_string)
 
 @app.command(group=remote_connection)
@@ -366,6 +350,7 @@ def fish(*,
         command (Optional[str]): Run the given command and then exit.
         init_command (Optional[str]): Run the given command and then enter an interactive shell.
     """
+    from .shell import init_fish
     init_fish(command, init_command)
 
 @app.command(group=remote_connection)
@@ -380,16 +365,19 @@ def nu(*,
         commands (Optional[str]): Run the given commands and then exit.
         exec_commands (Optional[str]): Run the given commands and then enter an interactive shell.
     """
+    from .shell import init_nu
     init_nu(commands, exec_commands)
 
 @app.command(group=remote_connection)
 def tmux():
     """Connect to the current challenge via a tmux login shell."""
+    from .remote import run_cmd
     run_cmd('tmux -l')
 
 @app.command(group=remote_connection)
 def zellij():
     """Connect to the current challenge via zellij."""
+    from .remote import run_cmd
     run_cmd('zellij')
 
 @app.command(group=remote_connection)
@@ -400,6 +388,7 @@ def zsh(*, command: Annotated[Optional[str], Parameter(name='-c')] = None):
     Args:
         command (Optional[str]): Run the given command and then exit.
     """
+    from .shell import init_zsh
     init_zsh(command)
 
 remote_execution = Group.create_ordered('Remote Execution')
@@ -412,6 +401,7 @@ def run(command: Optional[str] = None, /):
     Args:
         command (Optional[str]): The command to run
     """
+    from .remote import run_cmd
     run_cmd(command)
 
 @app.command(group=remote_execution)
@@ -426,6 +416,7 @@ def du(*,
         path (Optional[Path]): Path to list files from.
         count (int): Number of files to display.
     """
+    from .remote import run_cmd
     run_cmd(f'find {path or '~'} -type f -exec du -hs {{}} + 2>/dev/null | sort -hr | head -n {count}')
 
 @app.command(group=remote_execution)
@@ -440,6 +431,7 @@ def dust(*,
         path (Optional[Path]): Path to list files from.
         count (int): Number of files to display.
     """
+    from .remote import run_cmd
     run_cmd(f'dust -CFprsx -n {count} {path or '~'} 2>/dev/null')
 
 remote_transfer = Group.create_ordered('Remote Transfer')
@@ -452,6 +444,7 @@ def bat(path: Path, /):
     Args:
         path (Path): The file to print.
     """
+    from .remote import bat_file
     bat_file(path)
 
 @app.command(group=remote_transfer)
@@ -462,6 +455,7 @@ def cat(path: Path, /):
     Args:
         path (Path): The file to print.
     """
+    from .remote import print_file
     print_file(path)
 
 @app.command(alias='down', group=remote_transfer)
@@ -474,6 +468,7 @@ def download(remote_path: Path, local_path: Optional[ResolvedPath] = None, /):
         remote_path (Path): Path of remote file.
         local_path (Optional[ResolvedPath]): Path of local directory or file.
     """
+    from .remote import download_file
     download_file(remote_path, local_path)
 
 @app.command(alias='up', group=remote_transfer)
@@ -486,6 +481,7 @@ def upload(local_path: ResolvedExistingFile, remote_path: Optional[Path] = None,
         local_path (ResolvedExistingFile): Path of local file.
         remote_path (Optional[Path]): Path of remote directory or file.
     """
+    from .remote import upload_file
     upload_file(local_path, remote_path)
 
 remote_mount = Group.create_ordered('Remote Mounting')
@@ -500,6 +496,7 @@ def mount(*, mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name=
     Args:
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import mount_remote
     mount_remote(mount_point)
 
 @app.command(alias='umount', group=remote_mount)
@@ -512,6 +509,7 @@ def unmount(*, mount_point: Annotated[Optional[ResolvedDirectory], Parameter(nam
     Args:
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import unmount_remote
     unmount_remote(mount_point)
 
 remote_edit = Group.create_ordered('Remote Editing')
@@ -554,6 +552,7 @@ def edit(
         editor (Optional[str]): Name of the editor to use.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor(editor, path, mount_point)
 
 @app.command(alias='agy', group=remote_edit)
@@ -568,6 +567,7 @@ def antigravity(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Google Antigravity', path, mount_point)
 
 @app.command(group=remote_edit)
@@ -582,6 +582,7 @@ def codeedit(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('CodeEdit', path, mount_point)
 
 @app.command(group=remote_edit)
@@ -596,6 +597,7 @@ def cursor(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Cursor', path, mount_point)
 
 @app.command(group=remote_edit)
@@ -606,6 +608,7 @@ def emacs(path: Optional[Path] = None, /):
     Args:
         path (Optional[Path]): The path to open.
     """
+    from .remote import edit_path
     edit_path('emacs', path)
 
 @app.command(alias='hx', group=remote_edit)
@@ -620,6 +623,7 @@ def helix(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Helix', path, mount_point)
 
 @app.command(alias='kak', group=remote_edit)
@@ -631,6 +635,7 @@ def kakoune(path: Path, /, *, mount_point: Annotated[Optional[ResolvedDirectory]
         path (Path): The file path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Kakoune', path, mount_point)
 
 @app.command(group=remote_edit)
@@ -645,6 +650,7 @@ def lapce(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Lapce', path, mount_point)
 
 @app.command(group=remote_edit)
@@ -656,6 +662,7 @@ def micro(path: Path, /, *, mount_point: Annotated[Optional[ResolvedDirectory], 
         path (Path): The file path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Micro', path, mount_point)
 
 @app.command(group=remote_edit)
@@ -666,6 +673,7 @@ def nano(path: Path, /):
     Args:
         path (Path): The file path to open.
     """
+    from .remote import edit_path
     edit_path('nano', path)
 
 @app.command(alias='nvim', group=remote_edit)
@@ -676,6 +684,7 @@ def neovim(path: Optional[Path] = None, /):
     Args:
         path (Optional[Path]): The path to open.
     """
+    from .remote import edit_path
     edit_path('nvim', path)
 
 @app.command(group=remote_edit)
@@ -690,6 +699,7 @@ def pycharm(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('PyCharm', path, mount_point)
 
 @app.command(alias='subl', group=remote_edit)
@@ -704,6 +714,7 @@ def sublime(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Sublime Text', path, mount_point)
 
 @app.command(alias='mate', group=remote_edit)
@@ -718,6 +729,7 @@ def textmate(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('TextMate', path, mount_point)
 
 @app.command(group=remote_edit)
@@ -732,6 +744,7 @@ def theia(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Eclipse Theia', path, mount_point)
 
 @app.command(alias='vi', group=remote_edit)
@@ -742,6 +755,7 @@ def vim(path: Optional[Path] = None, /):
     Args:
         path (Optional[Path]): The path to open.
     """
+    from .remote import edit_path
     edit_path('vim', path)
 
 @app.command(alias='code', group=remote_edit)
@@ -756,6 +770,7 @@ def vscode(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Visual Studio Code', path, mount_point)
 
 @app.command(alias='codium', group=remote_edit)
@@ -770,6 +785,7 @@ def vscodium(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('VSCodium', path, mount_point)
 
 @app.command(alias='surf', group=remote_edit)
@@ -784,6 +800,7 @@ def windsurf(
         path (Optional[Path]): The path to open, relative to the mount point.
         mount_point (Optional[ResolvedDirectory]): Path of the mount point.
     """
+    from .editor import init_editor
     init_editor('Windsurf', path, mount_point)
 
 @app.command(group=remote_edit)
@@ -800,6 +817,8 @@ def zed(*,
         use_lang_servers (bool): Use ruff (linter) and ty (type checker).
         use_mount (bool): Mount the remote directory locally.
     """
+    from .editor import init_editor
+    from .zed import init_zed
     init_editor('Zed') if use_mount else init_zed(install, use_lang_servers)
 
 challenge_help = Group.create_ordered('Challenge Help')
@@ -807,6 +826,8 @@ challenge_help = Group.create_ordered('Challenge Help')
 @app.command(group=challenge_help)
 def discord():
     """Show the link to the pwn.college Discord server."""
+    from .log import info
+    from .terminal import apply_style
     info(f'Click {apply_style('https://discord.gg/pwncollege')} to go to the Discord server or copy the link and paste it into your browser.')
 
 @app.command(group=challenge_help)
@@ -826,17 +847,23 @@ def hint(*,
         module_id (Optional[str]): Module ID
         challenge_id (Optional[str]): Challenge ID
     """
+    from .challenge import show_hint
     show_hint(dojo_id, module_id, challenge_id)
 
 @app.command(group=challenge_help)
-def sensai(*, simple: Annotated[bool, Parameter(alias='-s')] = False):
+def sensai(*,
+    simple: Annotated[bool, Parameter(alias='-s')] = False,
+    timeout: Annotated[float, Parameter(alias='-t')] = DEFAULT_SENSAI_TIMEOUT
+):
     """
     Communicate with the pwn.college SensAI assistant.
 
     Args:
         simple (bool): Disable TUI
+        timeout (float): Seconds to wait for a SensAI response; use 0 to disable
     """
-    init_sensai(simple)
+    from .sensai import init_sensai
+    init_sensai(simple, timeout)
 
 flag_submit = Group.create_ordered('Flag Submission')
 
@@ -859,6 +886,7 @@ def solve(*,
         module_id (Optional[str]): Module ID
         challenge_id (Optional[str]): Challenge ID
     """
+    from .challenge import submit_flag
     submit_flag(flag, dojo_id, module_id, challenge_id)
 
 cli_config = Group.create_ordered('CLI Configuration')
@@ -871,6 +899,7 @@ def config(*, show_default: Annotated[bool, Parameter(name='--default', alias='-
     Args:
         show_default (bool): Show the default configuration instead.
     """
+    from .config import show_config
     show_config(show_default)
 
 cli_help = Group.create_ordered('CLI Help')
@@ -878,4 +907,5 @@ cli_help = Group.create_ordered('CLI Help')
 @app.command(alias='trogon', group=cli_help)
 def help():
     """Start a TUI to explore command documentation for the CLI. Press `^q` to quit."""
+    from .tui import init_trogon
     init_trogon(app)

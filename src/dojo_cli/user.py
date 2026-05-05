@@ -1,18 +1,26 @@
 """Handles user login and data."""
 
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from getpass import getpass
 import re
-from requests import Session
+from typing import Optional
+
+from bs4 import BeautifulSoup
+from niquests import Session
 from rich import print as rprint
 from rich.table import Table
-from typing import Optional
 
 from .config import load_user_config
 from .http import delete_cookie, request, save_cookie
 from .log import error, fail, info, success
 from .utils import can_render_image, download_image, get_belt_hex, show_table
+
+def get_session_cookie(session: Session) -> str:
+    for cookie in session.cookies:
+        if cookie.name == 'session' and cookie.value is not None:
+            return cookie.value
+    error('Failed to find session cookie.')
+    raise RuntimeError('unreachable')
 
 def do_register(username: Optional[str] = None, email: Optional[str] = None, password: Optional[str] = None):
     while not username:
@@ -31,7 +39,7 @@ def do_register(username: Optional[str] = None, email: Optional[str] = None, pas
             for error_msg in errors:
                 fail(error_msg)
         else:
-            save_cookie({'session': session.cookies.get('session')})
+            save_cookie({'session': get_session_cookie(session)})
             success(f'Registered and logged in as user [b green]{username}[/]!')
 
 def do_login(username: Optional[str] = None, password: Optional[str] = None):
@@ -49,7 +57,7 @@ def do_login(username: Optional[str] = None, password: Optional[str] = None):
             for error_msg in errors:
                 fail(error_msg)
         else:
-            save_cookie({'session': session.cookies.get('session')})
+            save_cookie({'session': get_session_cookie(session)})
             success(f'Logged in as user [b green]{username}[/]!')
 
 def do_logout():

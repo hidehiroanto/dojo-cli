@@ -1,10 +1,11 @@
 """Handles installing and updating package managers, and uses those managers to install and update packages and tools."""
 
 from pathlib import Path
-import requests
 from shutil import which
 import subprocess
 from typing import Optional
+
+import niquests
 
 from .constants import CARGO_HOME, UNAME_MACHINE, UNAME_SYSTEM, XDG_BIN_HOME, XDG_DATA_HOME
 from .log import error, info, warn
@@ -44,7 +45,7 @@ def homebrew_install(
     brew = Path(which('brew') or HOMEBREW_PREFIX / 'bin' / 'brew')
     if not brew.is_file():
         info('Installing Homebrew...')
-        subprocess.run(['bash', '-c', requests.get(HOMEBREW_INSTALL_URL).text])
+        subprocess.run(['bash', '-c', niquests.get(HOMEBREW_INSTALL_URL).text or ''])
         brew = Path(which('brew') or HOMEBREW_PREFIX / 'bin' / 'brew')
     elif not skip_update:
         subprocess.run([brew, 'update'])
@@ -74,7 +75,7 @@ def nanobrew_install(
     nb = Path(which('nb') or NANOBREW_PREFIX / 'bin' / 'nb')
     if not nb.is_file():
         info('Installing Nanobrew...')
-        subprocess.run(requests.get(NANOBREW_INSTALL_URL).text, shell=True)
+        subprocess.run(niquests.get(NANOBREW_INSTALL_URL).text or '', shell=True)
         nb = Path(which('nb') or NANOBREW_PREFIX / 'bin' / 'nb')
     elif not skip_update:
         subprocess.run([nb, 'update'])
@@ -105,7 +106,7 @@ def scoop_install(
     if not scoop.is_file():
         info('Installing scoop...')
         subprocess.run(['Set-ExecutionPolicy', '-ExecutionPolicy', 'RemoteSigned', '-Scope', 'CurrentUser'])
-        subprocess.run(requests.get(SCOOP_INSTALL_URL).text, shell=True)
+        subprocess.run(niquests.get(SCOOP_INSTALL_URL).text or '', shell=True)
         scoop = Path(which('scoop') or 'scoop')
     elif not skip_update:
         # TODO: Update scoop
@@ -132,7 +133,7 @@ def uv_install(
     uv = Path(which('uv') or XDG_BIN_HOME / 'uv').expanduser()
     if not uv.is_file():
         info('Installing uv...')
-        subprocess.run(requests.get(UV_INSTALL_URL).text, shell=True)
+        subprocess.run(niquests.get(UV_INSTALL_URL).text or '', shell=True)
         uv = Path(which('uv') or XDG_BIN_HOME / 'uv').expanduser()
     elif not skip_update:
         subprocess.run([uv, 'self', 'update'])
@@ -164,7 +165,7 @@ def wax_install(
     cargo = Path(which('cargo') or CARGO_HOME / 'bin' / 'cargo').expanduser()
     if not cargo.is_file():
         info('Installing Rust...')
-        subprocess.run(requests.get(RUSTUP_INSTALL_URL).text, shell=True)
+        subprocess.run(niquests.get(RUSTUP_INSTALL_URL).text or '', shell=True)
         cargo = Path(which('cargo') or CARGO_HOME / 'bin' / 'cargo').expanduser()
 
     wax = Path(which('wax') or CARGO_HOME / 'bin' / 'wax').expanduser()
@@ -199,7 +200,7 @@ def zerobrew_install(
     zb = Path(which('zb') or XDG_BIN_HOME / 'zb').expanduser()
     if not zb.is_file() or not skip_update:
         info('Installing Zerobrew...')
-        subprocess.run(requests.get(ZEROBREW_INSTALL_URL).text, shell=True)
+        subprocess.run(niquests.get(ZEROBREW_INSTALL_URL).text or '', shell=True)
         zb = Path(which('zb') or XDG_BIN_HOME / 'zb').expanduser()
 
     if taps:
