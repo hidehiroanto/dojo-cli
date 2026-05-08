@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "hidehiroanto", email = "hidehiro.anto@gmail.com" }
 ]
-requires-python = ">=3.14.4"
+requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "cairosvg>=2.9.0",
@@ -27,5 +27,5 @@ dependencies = [
 dojo = "dojo_cli:app"
 
 [build-system]
-requires = ["uv_build>=0.11.8,<0.12.0"]
+requires = ["uv_build>=0.11.11,<0.12.0"]
 build-backend = "uv_build"

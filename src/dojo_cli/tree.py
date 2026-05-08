@@ -11,7 +11,7 @@ from .http import request
 from .challenge import DOJO_IDS
 from .utils import fix_markdown_links
 
-ROOT_LABEL = 'k up/j down: move, space: toggle, enter: select, ctrl+p: palette, ctrl+q: quit'
+ROOT_LABEL = 'k/up: move up, j/down: move down, space: toggle, enter: select, ctrl+p: palette, ctrl+q: quit'
 ROOT_DESCRIPTION = """
 | Key(s) | Description |
 | :- | :- |
@@ -80,14 +80,8 @@ class StartChallengeModal(ModalScreen):
             self.dismiss()
 
 class TreeApp(App):
-    BINDINGS = [
-        ("k", "cursor_up", "Up"),
-        ("j", "cursor_down", "Down"),
-    ]
-    def action_cursor_up(self) -> None:
-        self.query_one(Tree).action_cursor_up()
-    def action_cursor_down(self) -> None:
-        self.query_one(Tree).action_cursor_down()
+    BINDINGS = [('k', 'cursor_up', 'Up'), ('j', 'cursor_down', 'Down')]
+
     def __init__(
         self,
         dojo_id: Optional[str] = None,
@@ -98,8 +92,8 @@ class TreeApp(App):
     ):
         super().__init__()
         self.auth = auth
-        self.loaded_modules: set[str] = set()
-        dojos = request('/dojos', auth=auth).json().get('dojos')
+        self.loaded_modules = set()
+        dojos = request('/dojos', auth=self.auth).json().get('dojos')
         sorted_dojos = sorted(filter(lambda dojo: dojo['id'] in DOJO_IDS, dojos), key=lambda dojo: DOJO_IDS.index(dojo['id']))
         sorted_dojos += sorted(filter(lambda dojo: dojo['id'] not in DOJO_IDS, dojos), key=lambda dojo: dojo['id'])
 
@@ -200,6 +194,12 @@ class TreeApp(App):
             yield tree
             yield DescriptionViewer(show_table_of_contents=False)
         yield Footer()
+
+    def action_cursor_up(self) -> None:
+        self.query_one(Tree).action_cursor_up()
+
+    def action_cursor_down(self) -> None:
+        self.query_one(Tree).action_cursor_down()
 
     def on_mount(self):
         self.call_after_refresh(lambda: self.query_one(DescriptionViewer).query_one(Markdown).update(ROOT_DESCRIPTION))
