@@ -8,7 +8,6 @@ import shlex
 import socket
 from threading import Lock
 from time import monotonic
-from typing import Optional
 
 from niquests import Session
 from niquests.cookies import create_cookie
@@ -93,14 +92,14 @@ class SensaiApp(App):
     OPTION_UPDATE_DELAY = 0.15
     PATH_MATCH_BOUNDARIES = frozenset('/._- ')
 
-    def __init__(self, base_url: str, session_cookie: str, timeout: Optional[float]):
+    def __init__(self, base_url: str, session_cookie: str, timeout: float | None):
         super().__init__()
         self.base_url = base_url
         self.session_cookie = session_cookie
         self.timeout = timeout
 
-        self.http_session: Optional[SocketIoSession] = None
-        self.sio: Optional[SocketIoSimpleClient] = None
+        self.http_session: SocketIoSession | None = None
+        self.sio: SocketIoSimpleClient | None = None
         self.user_message, self.terminal_context, self.file_context = '', '', ''
 
         self.command_history = []
@@ -109,7 +108,7 @@ class SensaiApp(App):
         self.option_cache: OrderedDict[str, tuple[float, list[str]]] = OrderedDict()
         self.option_fetches: set[str] = set()
         self.option_fetch_lock = Lock()
-        self.option_update_timer: Optional[Timer] = None
+        self.option_update_timer: Timer | None = None
         self.remote_client = get_remote_client()
 
     def compose(self) -> ComposeResult:
@@ -333,7 +332,7 @@ class SensaiApp(App):
                     )
                 )
 
-    def get_file_query_at_cursor(self, value: str, cursor_position: int) -> Optional[str]:
+    def get_file_query_at_cursor(self, value: str, cursor_position: int) -> str | None:
         for match in re.finditer(r'@\S{3,}', value):
             span = match.span()
             if span[0] <= cursor_position <= span[1]:
@@ -387,7 +386,7 @@ class SensaiApp(App):
     def is_file_option_cache_fresh(self, cached_at: float) -> bool:
         return monotonic() - cached_at <= self.FILE_OPTION_CACHE_TTL
 
-    def get_fuzzy_match_positions(self, query: str, candidate: str) -> Optional[list[int]]:
+    def get_fuzzy_match_positions(self, query: str, candidate: str) -> list[int] | None:
         positions = []
         start = 0
         for char in query:
@@ -401,7 +400,7 @@ class SensaiApp(App):
     def is_fuzzy_match(self, query: str, candidate: str) -> bool:
         return self.get_fuzzy_match_positions(query, candidate.casefold()) is not None
 
-    def get_file_option_rank(self, query: str, option: str) -> Optional[tuple[int, int, int, int, int, int, int, int]]:
+    def get_file_option_rank(self, query: str, option: str) -> tuple[int, int, int, int, int, int, int, int] | None:
         option_casefold = option.casefold()
         positions = self.get_fuzzy_match_positions(query, option_casefold)
         if positions is None:
@@ -446,7 +445,7 @@ class SensaiApp(App):
     def get_visible_file_options(self, options: list[str]) -> list[str]:
         return options[:self.MAX_OPTIONS]
 
-    def get_cached_file_options(self, query: str, require_min_results: bool = True) -> Optional[list[str]]:
+    def get_cached_file_options(self, query: str, require_min_results: bool = True) -> list[str] | None:
         cached = self.option_cache.get(query)
         if cached:
             cached_at, options = cached
@@ -475,7 +474,7 @@ class SensaiApp(App):
         while len(self.option_cache) > self.FILE_OPTION_CACHE_SIZE:
             self.option_cache.popitem(last=False)
 
-    def fetch_file_options(self, query: str, use_path_scheme: bool = True) -> Optional[list[str]]:
+    def fetch_file_options(self, query: str, use_path_scheme: bool = True) -> list[str] | None:
         fd_args = ['fd', '-apu', '-tf', '-E', '/nix', '-E', '/sys', '.', '/']
         fzf_args = ['fzf', '-f', query]
         if use_path_scheme:
@@ -496,7 +495,7 @@ class SensaiApp(App):
             return self.fetch_file_options(query, use_path_scheme=False)
         return options
 
-    def finish_file_options(self, query: str, options: Optional[list[str]]):
+    def finish_file_options(self, query: str, options: list[str] | None):
         self.option_fetches.discard(query)
         if options is None:
             return
@@ -603,7 +602,7 @@ class SensaiApp(App):
         self.user_message = input_box.value
         await self.submit_input(input_box)
 
-def run_simple(base_url: str, session_cookie: str, timeout: Optional[float]):
+def run_simple(base_url: str, session_cookie: str, timeout: float | None):
     with Session() as session:
         session.cookies.set_cookie(create_cookie('session', session_cookie))
         session.get(base_url + '/sensai/')

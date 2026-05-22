@@ -7,7 +7,6 @@ from paramiko.channel import Channel
 from paramiko.client import AutoAddPolicy, SSHClient
 from paramiko.sftp_client import SFTPClient
 import stat
-from typing import Optional
 
 from .config import load_user_config
 
@@ -71,7 +70,7 @@ class RemoteClient(fuse.Operations):
         return self.ssh.get_transport().open_session()
 
     @fuse.overrides(fuse.Operations)
-    def getattr(self, path: str, fh: Optional[int] = None):
+    def getattr(self, path: str, fh: int | None = None):
         try:
             stat_result = self.sftp.lstat(path)
             keys = ('st_mode', 'st_uid', 'st_gid', 'st_size', 'st_atime', 'st_mtime')
@@ -169,7 +168,7 @@ class RemoteClient(fuse.Operations):
         return self.sftp.symlink(source, target)
 
     @fuse.overrides(fuse.Operations)
-    def truncate(self, path: str, length: int, fh: Optional[int] = None) -> int:
+    def truncate(self, path: str, length: int, fh: int | None = None) -> int:
         return self.sftp.truncate(path, length)
 
     @fuse.overrides(fuse.Operations)
@@ -177,7 +176,7 @@ class RemoteClient(fuse.Operations):
         return self.sftp.unlink(path)
 
     @fuse.overrides(fuse.Operations)
-    def utimens(self, path: str, times: Optional[tuple[int, int]] = None) -> int:
+    def utimens(self, path: str, times: tuple[int, int] | None = None) -> int:
         if self.use_ns and times:
             times = (times[0] // 1_000_000_000, times[1] // 1_000_000_000)
         return self.sftp.utime(path, times)

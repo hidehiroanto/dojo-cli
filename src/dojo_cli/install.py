@@ -3,7 +3,6 @@
 from pathlib import Path
 from shutil import which
 import subprocess
-from typing import Optional
 
 import niquests
 
@@ -35,9 +34,9 @@ ZEROBREW_GITHUB_URL = 'https://github.com/lucasgelfond/zerobrew'
 ZEROBREW_INSTALL_URL = 'https://zerobrew.rs/install'
 
 def homebrew_install(
-    formulae: Optional[list[str]] = None,
-    casks: Optional[list[str]] = None,
-    taps: Optional[list[str]] = None,
+    formulae: list[str] | None = None,
+    casks: list[str] | None = None,
+    taps: list[str] | None = None,
     skip_update: bool = False
 ):
     """Install Homebrew formulae and casks."""
@@ -59,9 +58,9 @@ def homebrew_install(
         subprocess.run([brew, 'install'] + formulae)
 
 def nanobrew_install(
-    formulae: Optional[list[str]] = None,
-    casks: Optional[list[str]] = None,
-    taps: Optional[list[str]] = None,
+    formulae: list[str] | None = None,
+    casks: list[str] | None = None,
+    taps: list[str] | None = None,
     skip_update: bool = False
 ):
     """
@@ -88,8 +87,8 @@ def nanobrew_install(
         subprocess.run([nb, 'install'] + formulae)
 
 def scoop_install(
-    packages: Optional[list[str]] = None,
-    buckets: Optional[list[str]] = None,
+    packages: list[str] | None = None,
+    buckets: list[str] | None = None,
     skip_update: bool = False
 ):
     # Requires PowerShell
@@ -120,9 +119,9 @@ def scoop_install(
             subprocess.run(['scoop', 'install', package])
 
 def uv_install(
-    global_packages: Optional[list[str]] = None,
-    local_packages: Optional[list[str]] = None,
-    tools: Optional[list[str]] = None,
+    global_packages: list[str] | None = None,
+    local_packages: list[str] | None = None,
+    tools: list[str] | None = None,
     skip_update: bool = False
 ):
     """
@@ -150,9 +149,9 @@ def uv_install(
 # Installing wax casks may lead to `IO error: Permission denied (os error 13)`
 # Using wax to uninstall and reinstall ruff or ty may lead to `IO error: File exists (os error 17)`
 def wax_install(
-    formulae: Optional[list[str]] = None,
-    casks: Optional[list[str]] = None,
-    taps: Optional[list[str]] = None,
+    formulae: list[str] | None = None,
+    casks: list[str] | None = None,
+    taps: list[str] | None = None,
     skip_update: bool = False
 ):
     """
@@ -185,9 +184,9 @@ def wax_install(
         subprocess.run([wax, 'i'] + formulae)
 
 def zerobrew_install(
-    formulae: Optional[list[str]] = None,
-    casks: Optional[list[str]] = None,
-    taps: Optional[list[str]] = None,
+    formulae: list[str] | None = None,
+    casks: list[str] | None = None,
+    taps: list[str] | None = None,
     skip_update: bool = False
 ):
     """

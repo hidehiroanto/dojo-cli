@@ -5,7 +5,7 @@
 # Caveat: this CLI is designed for Linux remote challenges, might work for Mac challenges idk
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 from cyclopts import App, Group, Parameter, validators
 from cyclopts.types import ResolvedDirectory, ResolvedExistingFile, ResolvedPath
@@ -30,32 +30,32 @@ user_login = Group.create_ordered('User Login and Settings')
 
 @app.command(group=user_login)
 def register(*,
-    username: Annotated[Optional[str], Parameter(alias='-u')] = None,
-    email: Annotated[Optional[str], Parameter(alias='-e')] = None,
-    password: Annotated[Optional[str], Parameter(alias='-p')] = None
+    username: Annotated[str | None, Parameter(alias='-u')] = None,
+    email: Annotated[str | None, Parameter(alias='-e')] = None,
+    password: Annotated[str | None, Parameter(alias='-p')] = None
 ):
     """
     Register for a new pwn.college account and save session cookie to the cache.
 
     Args:
-        username (Optional[str]): Username
-        email (Optional[str]): Email
-        password (Optional[str]): Password
+        username (str | None): Username
+        email (str | None): Email
+        password (str | None): Password
     """
     from .user import do_register
     do_register(username, email, password)
 
 @app.command(group=user_login)
 def login(*,
-    username: Annotated[Optional[str], Parameter(alias='-u')] = None,
-    password: Annotated[Optional[str], Parameter(alias='-p')] = None
+    username: Annotated[str | None, Parameter(alias='-u')] = None,
+    password: Annotated[str | None, Parameter(alias='-p')] = None
 ):
     """
     Log into your pwn.college account and save session cookie to the cache.
 
     Args:
-        username (Optional[str]): Username or email
-        password (Optional[str]): Password
+        username (str | None): Username or email
+        password (str | None): Password
     """
     from .user import do_login
     do_login(username, password)
@@ -92,31 +92,31 @@ def whoami(*, simple: Annotated[bool, Parameter(alias='-s')] = False):
     show_me(simple)
 
 @app.command(alias=('rank', 'score'), group=user_info)
-def whois(*, username: Annotated[Optional[str], Parameter(alias='-u')] = None):
+def whois(*, username: Annotated[str | None, Parameter(alias='-u')] = None):
     """
     Show global ranking for another user. If no username is given, show the current user's ranking.
 
     Args:
-        username (Optional[str]): Username to query
+        username (str | None): Username to query
     """
     from .user import show_score
     show_score(username)
 
 @app.command(group=user_info)
-def activity(*, user_id: Annotated[Optional[int], Parameter(name='--id', alias='-i')] = None):
+def activity(*, user_id: Annotated[int | None, Parameter(name='--id', alias='-i')] = None):
     """
     Show activity for another user. If no user ID is given, show the current user's activity.
 
     Args:
-        user_id (Optional[int]): User ID
+        user_id (int | None): User ID
     """
     from .user import show_activity
     show_activity(user_id)
 
 @app.command(group=user_info)
 def scoreboard(*,
-    dojo_id: Annotated[Optional[str], Parameter(name='--dojo', alias='-d')] = None,
-    module_id: Annotated[Optional[str], Parameter(name='--module', alias='-m')] = None,
+    dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
+    module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
     duration: Annotated[str, Parameter(alias='-t')] = 'all',
     page: Annotated[int, Parameter(alias='-p')] = 1,
     simple: Annotated[bool, Parameter(alias='-s')] = False
@@ -125,8 +125,8 @@ def scoreboard(*,
     Show scoreboard for a dojo or module. If no dojo is given, show WeChall global scoreboard.
 
     Args:
-        dojo_id (Optional[str]): Dojo ID
-        module_id (Optional[str]): Module ID
+        dojo_id (str | None): Dojo ID
+        module_id (str | None): Module ID
         duration (str): Scoreboard duration (week, month, all)
         page (int): Scoreboard page number
         simple (bool): Disable images
@@ -136,16 +136,16 @@ def scoreboard(*,
 
 @app.command(group=user_info)
 def belts(*,
-    belt: Annotated[Optional[str], Parameter(name='--color', alias='-c')] = None,
-    page: Annotated[Optional[int], Parameter(alias='-p')] = None,
+    belt: Annotated[str | None, Parameter(name='--color', alias='-c')] = None,
+    page: Annotated[int | None, Parameter(alias='-p')] = None,
     simple: Annotated[bool, Parameter(alias='-s')] = False
 ):
     """
     Show all the users who have earned belts above white belt.
 
     Args:
-        belt (Optional[str]): Filter by belt color
-        page (Optional[int]): Belt list page number
+        belt (str | None): Filter by belt color
+        page (int | None): Belt list page number
         simple (bool): Disable images
     """
     from .user import show_belts
@@ -155,9 +155,9 @@ challenge_info = Group.create_ordered('Challenge Info')
 
 @app.command(name='list', alias='ls', group=challenge_info)
 def ls(*,
-    dojo_id: Annotated[Optional[str], Parameter(name='--dojo', alias='-d')] = None,
-    module_id: Annotated[Optional[str], Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[Optional[str], Parameter(name='--challenge', alias='-c')] = None,
+    dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
+    module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None,
     auth: Annotated[bool, Parameter(alias='-a')] = False,
     official: Annotated[bool, Parameter(alias='-o')] = False,
     simple: Annotated[bool, Parameter(alias='-s')] = False
@@ -166,9 +166,9 @@ def ls(*,
     List the members of a dojo or module. If no dojo is given, display all dojos.
 
     Args:
-        dojo_id (Optional[str]): Dojo ID
-        module_id (Optional[str]): Module ID
-        challenge_id (Optional[str]): Challenge ID
+        dojo_id (str | None): Dojo ID
+        module_id (str | None): Module ID
+        challenge_id (str | None): Challenge ID
         auth (bool): Authenticate to display hidden dojos
         official (bool): Filter to official dojos
         simple (bool): Disable images
@@ -178,9 +178,9 @@ def ls(*,
 
 @app.command(group=challenge_info)
 def tree(*,
-    dojo_id: Annotated[Optional[str], Parameter(name='--dojo', alias='-d')] = None,
-    module_id: Annotated[Optional[str], Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[Optional[str], Parameter(name='--challenge', alias='-c')] = None,
+    dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
+    module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None,
     auth: Annotated[bool, Parameter(alias='-a')] = False,
     official: Annotated[bool, Parameter(alias='-o')] = False
 ):
@@ -188,9 +188,9 @@ def tree(*,
     Display a tree of the members of a dojo or module in a TUI. If no dojo is given, display a tree of all dojos.
 
     Args:
-        dojo_id (Optional[str]): Dojo ID
-        module_id (Optional[str]): Module ID
-        challenge_id (Optional[str]): Challenge ID
+        dojo_id (str | None): Dojo ID
+        module_id (str | None): Module ID
+        challenge_id (str | None): Challenge ID
         auth (bool): Authenticate to display hidden dojos
         official (bool): Filter to official dojos
     """
@@ -207,24 +207,24 @@ def twitch():
 
 @app.command(alias='yt', group=video_playback)
 def youtube(*,
-    video_id: Annotated[Optional[str], Parameter(name='--video', alias='-v')] = None,
-    playlist_id: Annotated[Optional[str], Parameter(name='--playlist', alias='-p')] = None,
-    dojo_id: Annotated[Optional[str], Parameter(name='--dojo', alias='-d')] = None,
-    module_id: Annotated[Optional[str], Parameter(name='--module', alias='-m')] = None,
-    resource_id: Annotated[Optional[str], Parameter(name='--resource', alias='-r')] = None,
-    page: Annotated[Optional[int], Parameter(alias='-n')] = None,
+    video_id: Annotated[str | None, Parameter(name='--video', alias='-v')] = None,
+    playlist_id: Annotated[str | None, Parameter(name='--playlist', alias='-p')] = None,
+    dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
+    module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
+    resource_id: Annotated[str | None, Parameter(name='--resource', alias='-r')] = None,
+    page: Annotated[int | None, Parameter(alias='-n')] = None,
     simple: Annotated[bool, Parameter(alias='-s')] = False
 ):
     """
     Play a lecture on YouTube.
 
     Args:
-        video_id (Optional[str]): YouTube video ID or URL
-        playlist_id (Optional[str]): YouTube playlist ID
-        dojo_id (Optional[str]): Dojo ID
-        module_id (Optional[str]): Module ID
-        resource_id (Optional[str]): Resource ID
-        page (Optional[int]): YouTube feed page number
+        video_id (str | None): YouTube video ID or URL
+        playlist_id (str | None): YouTube playlist ID
+        dojo_id (str | None): Dojo ID
+        module_id (str | None): Module ID
+        resource_id (str | None): Resource ID
+        page (int | None): YouTube feed page number
         simple (bool): Disable thumbnails
     """
     from .video import init_youtube
@@ -235,9 +235,9 @@ challenge_mode = Group(validator=validators.mutually_exclusive)
 
 @app.command(group=challenge_launch)
 def start(*,
-    dojo_id: Annotated[Optional[str], Parameter(name='--dojo', alias='-d')] = None,
-    module_id: Annotated[Optional[str], Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[Optional[str], Parameter(name='--challenge', alias='-c')] = None,
+    dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
+    module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None,
     normal: Annotated[bool, Parameter(alias='-n', group=challenge_mode)] = False,
     privileged: Annotated[bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)] = False
 ):
@@ -251,9 +251,9 @@ def start(*,
     If neither --normal nor --privileged are given, start in the current mode if a challenge is running, otherwise start in normal mode.
 
     Args:
-        dojo_id (Optional[str]): Dojo ID
-        module_id (Optional[str]): Module ID
-        challenge_id (Optional[str]): Challenge ID
+        dojo_id (str | None): Dojo ID
+        module_id (str | None): Module ID
+        challenge_id (str | None): Challenge ID
         normal (bool): Start in normal mode
         privileged (bool): Start in privileged mode
     """
@@ -328,42 +328,42 @@ def connect():
     run_cmd()
 
 @app.command(group=remote_connection)
-def bash(*, command_string: Annotated[Optional[str], Parameter(name='-c')] = None):
+def bash(*, command_string: Annotated[str | None, Parameter(name='-c')] = None):
     """
     Connect to the current challenge via a bash login shell.
 
     Args:
-        command_string (Optional[str]): Run the given command and then exit.
+        command_string (str | None): Run the given command and then exit.
     """
     from .shell import init_bash
     init_bash(command_string)
 
 @app.command(group=remote_connection)
 def fish(*,
-    command: Annotated[Optional[str], Parameter(alias='-c')] = None,
-    init_command: Annotated[Optional[str], Parameter(alias='-C')] = None
+    command: Annotated[str | None, Parameter(alias='-c')] = None,
+    init_command: Annotated[str | None, Parameter(alias='-C')] = None
 ):
     """
     Connect to the current challenge via a fish login shell.
 
     Args:
-        command (Optional[str]): Run the given command and then exit.
-        init_command (Optional[str]): Run the given command and then enter an interactive shell.
+        command (str | None): Run the given command and then exit.
+        init_command (str | None): Run the given command and then enter an interactive shell.
     """
     from .shell import init_fish
     init_fish(command, init_command)
 
 @app.command(group=remote_connection)
 def nu(*,
-    commands: Annotated[Optional[str], Parameter(alias='-c')] = None,
-    exec_commands: Annotated[Optional[str], Parameter(name='--execute', alias='-e')] = None
+    commands: Annotated[str | None, Parameter(alias='-c')] = None,
+    exec_commands: Annotated[str | None, Parameter(name='--execute', alias='-e')] = None
 ):
     """
     Connect to the current challenge via a nushell login shell.
 
     Args:
-        commands (Optional[str]): Run the given commands and then exit.
-        exec_commands (Optional[str]): Run the given commands and then enter an interactive shell.
+        commands (str | None): Run the given commands and then exit.
+        exec_commands (str | None): Run the given commands and then enter an interactive shell.
     """
     from .shell import init_nu
     init_nu(commands, exec_commands)
@@ -381,12 +381,12 @@ def zellij():
     run_cmd('zellij')
 
 @app.command(group=remote_connection)
-def zsh(*, command: Annotated[Optional[str], Parameter(name='-c')] = None):
+def zsh(*, command: Annotated[str | None, Parameter(name='-c')] = None):
     """
     Connect to the current challenge via a zsh login shell.
 
     Args:
-        command (Optional[str]): Run the given command and then exit.
+        command (str | None): Run the given command and then exit.
     """
     from .shell import init_zsh
     init_zsh(command)
@@ -394,26 +394,26 @@ def zsh(*, command: Annotated[Optional[str], Parameter(name='-c')] = None):
 remote_execution = Group.create_ordered('Remote Execution')
 
 @app.command(alias=('ssh', 'exec'), group=remote_execution)
-def run(command: Optional[str] = None, /):
+def run(command: str | None = None, /):
     """
     Execute a remote command. If no command is given, start a shell like `connect`.
 
     Args:
-        command (Optional[str]): The command to run
+        command (str | None): The command to run
     """
     from .remote import run_cmd
     run_cmd(command)
 
 @app.command(group=remote_execution)
 def du(*,
-    path: Annotated[Optional[Path], Parameter(alias='-p')] = None,
+    path: Annotated[Path | None, Parameter(alias='-p')] = None,
     count: Annotated[int, Parameter(name='--lines', alias='-n')] = 20
 ):
     """
     List the largest files in a directory, using `du`. Helpful when clearing up space.
 
     Args:
-        path (Optional[Path]): Path to list files from.
+        path (Path | None): Path to list files from.
         count (int): Number of files to display.
     """
     from .remote import run_cmd
@@ -421,14 +421,14 @@ def du(*,
 
 @app.command(group=remote_execution)
 def dust(*,
-    path: Annotated[Optional[Path], Parameter(alias='-p')] = None,
+    path: Annotated[Path | None, Parameter(alias='-p')] = None,
     count: Annotated[int, Parameter(name='--lines', alias='-n')] = 20
 ):
     """
     List the largest files in a directory, using `dust`. Helpful when clearing up space.
 
     Args:
-        path (Optional[Path]): Path to list files from.
+        path (Path | None): Path to list files from.
         count (int): Number of files to display.
     """
     from .remote import run_cmd
@@ -459,27 +459,27 @@ def cat(path: Path, /):
     print_file(path)
 
 @app.command(alias='down', group=remote_transfer)
-def download(remote_path: Path, local_path: Optional[ResolvedPath] = None, /):
+def download(remote_path: Path, local_path: ResolvedPath | None = None, /):
     """
     Download a file from remote to local.
     By default, it downloads the file to the current working directory.
 
     Args:
         remote_path (Path): Path of remote file.
-        local_path (Optional[ResolvedPath]): Path of local directory or file.
+        local_path (ResolvedPath | None): Path of local directory or file.
     """
     from .remote import download_file
     download_file(remote_path, local_path)
 
 @app.command(alias='up', group=remote_transfer)
-def upload(local_path: ResolvedExistingFile, remote_path: Optional[Path] = None, /):
+def upload(local_path: ResolvedExistingFile, remote_path: Path | None = None, /):
     """
     Upload a file from local to remote.
     By default, it uploads the file to the configured SSH project path.
 
     Args:
         local_path (ResolvedExistingFile): Path of local file.
-        remote_path (Optional[Path]): Path of remote directory or file.
+        remote_path (Path | None): Path of remote directory or file.
     """
     from .remote import upload_file
     upload_file(local_path, remote_path)
@@ -487,27 +487,27 @@ def upload(local_path: ResolvedExistingFile, remote_path: Optional[Path] = None,
 remote_mount = Group.create_ordered('Remote Mounting')
 
 @app.command(group=remote_mount)
-def mount(*, mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None):
+def mount(*, mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None):
     """
     Mount the configured remote project path locally onto the specified mount point.
 
     If no mount point is specified, it defaults to the configured mount point.
 
     Args:
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import mount_remote
     mount_remote(mount_point)
 
 @app.command(alias='umount', group=remote_mount)
-def unmount(*, mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None):
+def unmount(*, mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None):
     """
     Unmount the filesystem at the specified mount point.
 
     If no mount point is specified, it defaults to the configured mount point.
 
     Args:
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import unmount_remote
     unmount_remote(mount_point)
@@ -516,9 +516,9 @@ remote_edit = Group.create_ordered('Remote Editing')
 
 @app.command(group=remote_edit)
 def edit(
-    path: Optional[Path] = None, /, *,
-    editor: Annotated[Optional[str], Parameter(alias='-e')] = None,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    editor: Annotated[str | None, Parameter(alias='-e')] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally onto the given mount point, and open the given path in the given editor.
@@ -530,7 +530,7 @@ def edit(
         'Cursor'
         'Eclipse Theia' (macOS only for now)
         'Emacs'
-        'Google Antigravity'
+        'Google Antigravity IDE'
         'Helix'
         'Kakoune'
         'Lapce'
@@ -548,119 +548,119 @@ def edit(
     If no mount point is specified, it defaults to the configured mount point.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        editor (Optional[str]): Name of the editor to use.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        editor (str | None): Name of the editor to use.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor(editor, path, mount_point)
 
-@app.command(alias='agy', group=remote_edit)
+@app.command(alias='agy-ide', group=remote_edit)
 def antigravity(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
-    Mount the current challenge locally and open it in Google Antigravity.
+    Mount the current challenge locally and open it in Google Antigravity IDE.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
-    init_editor('Google Antigravity', path, mount_point)
+    init_editor('Google Antigravity IDE', path, mount_point)
 
 @app.command(group=remote_edit)
 def codeedit(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in CodeEdit. (macOS only, very broken)
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('CodeEdit', path, mount_point)
 
 @app.command(group=remote_edit)
 def cursor(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in Cursor.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('Cursor', path, mount_point)
 
 @app.command(group=remote_edit)
-def emacs(path: Optional[Path] = None, /):
+def emacs(path: Path | None = None, /):
     """
     Open a remote directory or file in Emacs.
 
     Args:
-        path (Optional[Path]): The path to open.
+        path (Path | None): The path to open.
     """
     from .remote import edit_path
     edit_path('emacs', path)
 
 @app.command(alias='hx', group=remote_edit)
 def helix(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in Helix.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('Helix', path, mount_point)
 
 @app.command(alias='kak', group=remote_edit)
-def kakoune(path: Path, /, *, mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None):
+def kakoune(path: Path, /, *, mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None):
     """
     Mount the current challenge locally and open a mounted file in Kakoune.
 
     Args:
         path (Path): The file path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('Kakoune', path, mount_point)
 
 @app.command(group=remote_edit)
 def lapce(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in Lapce.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('Lapce', path, mount_point)
 
 @app.command(group=remote_edit)
-def micro(path: Path, /, *, mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None):
+def micro(path: Path, /, *, mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None):
     """
     Mount the current challenge locally and open a mounted file in Micro.
 
     Args:
         path (Path): The file path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('Micro', path, mount_point)
@@ -677,128 +677,128 @@ def nano(path: Path, /):
     edit_path('nano', path)
 
 @app.command(alias='nvim', group=remote_edit)
-def neovim(path: Optional[Path] = None, /):
+def neovim(path: Path | None = None, /):
     """
     Open a remote directory or file in Neovim.
 
     Args:
-        path (Optional[Path]): The path to open.
+        path (Path | None): The path to open.
     """
     from .remote import edit_path
     edit_path('nvim', path)
 
 @app.command(group=remote_edit)
 def pycharm(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in PyCharm.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('PyCharm', path, mount_point)
 
 @app.command(alias='subl', group=remote_edit)
 def sublime(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in Sublime Text.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('Sublime Text', path, mount_point)
 
 @app.command(alias='mate', group=remote_edit)
 def textmate(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in TextMate.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('TextMate', path, mount_point)
 
 @app.command(group=remote_edit)
 def theia(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in Eclipse Theia. (macOS only for now)
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('Eclipse Theia', path, mount_point)
 
 @app.command(alias='vi', group=remote_edit)
-def vim(path: Optional[Path] = None, /):
+def vim(path: Path | None = None, /):
     """
     Open a remote directory or file in Vim.
 
     Args:
-        path (Optional[Path]): The path to open.
+        path (Path | None): The path to open.
     """
     from .remote import edit_path
     edit_path('vim', path)
 
 @app.command(alias='code', group=remote_edit)
 def vscode(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in Visual Studio Code.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('Visual Studio Code', path, mount_point)
 
 @app.command(alias='codium', group=remote_edit)
 def vscodium(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in VSCodium.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('VSCodium', path, mount_point)
 
 @app.command(alias='surf', group=remote_edit)
 def windsurf(
-    path: Optional[Path] = None, /, *,
-    mount_point: Annotated[Optional[ResolvedDirectory], Parameter(name='--point', alias='-p')] = None
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
 ):
     """
     Mount the current challenge locally and open it in Windsurf.
 
     Args:
-        path (Optional[Path]): The path to open, relative to the mount point.
-        mount_point (Optional[ResolvedDirectory]): Path of the mount point.
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
     """
     from .editor import init_editor
     init_editor('Windsurf', path, mount_point)
@@ -832,9 +832,9 @@ def discord():
 
 @app.command(group=challenge_help)
 def hint(*,
-    dojo_id: Annotated[Optional[str], Parameter(name='--dojo', alias='-d')] = None,
-    module_id: Annotated[Optional[str], Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[Optional[str], Parameter(name='--challenge', alias='-c')] = None
+    dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
+    module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None
 ):
     """
     Show a hint for a challenge's flag.
@@ -843,9 +843,9 @@ def hint(*,
     If no challenge is given, the hint will be provided for the current challenge's flag.
 
     Args:
-        dojo_id (Optional[str]): Dojo ID
-        module_id (Optional[str]): Module ID
-        challenge_id (Optional[str]): Challenge ID
+        dojo_id (str | None): Dojo ID
+        module_id (str | None): Module ID
+        challenge_id (str | None): Challenge ID
     """
     from .challenge import show_hint
     show_hint(dojo_id, module_id, challenge_id)
@@ -869,10 +869,10 @@ flag_submit = Group.create_ordered('Flag Submission')
 
 @app.command(alias='submit', group=flag_submit)
 def solve(*,
-    flag: Annotated[Optional[str], Parameter(alias='-f')] = None,
-    dojo_id: Annotated[Optional[str], Parameter(name='--dojo', alias='-d')] = None,
-    module_id: Annotated[Optional[str], Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[Optional[str], Parameter(name='--challenge', alias='-c')] = None
+    flag: Annotated[str | None, Parameter(alias='-f')] = None,
+    dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
+    module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None
 ):
     """
     Submit a flag for a challenge. Warns if flag is for wrong user or challenge.
@@ -881,10 +881,10 @@ def solve(*,
     If no challenge is given, the flag will be submitted for the current challenge.
 
     Args:
-        flag (Optional[str]): Flag to submit.
-        dojo_id (Optional[str]): Dojo ID
-        module_id (Optional[str]): Module ID
-        challenge_id (Optional[str]): Challenge ID
+        flag (str | None): Flag to submit.
+        dojo_id (str | None): Dojo ID
+        module_id (str | None): Module ID
+        challenge_id (str | None): Challenge ID
     """
     from .challenge import submit_flag
     submit_flag(flag, dojo_id, module_id, challenge_id)

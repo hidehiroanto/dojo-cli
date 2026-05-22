@@ -4,7 +4,7 @@ import asyncio
 from http.cookies import SimpleCookie
 import inspect
 from types import SimpleNamespace
-from typing import Optional, cast
+from typing import cast
 
 import engineio
 import engineio.async_client as engineio_async_client
@@ -85,7 +85,7 @@ class WebSocketAdapter:
             raise OSError(exc) from exc
 
 class SocketIoSession:
-    def __init__(self, session_cookie: Optional[str] = None):
+    def __init__(self, session_cookie: str | None = None):
         self.closed = False
         self.session = AsyncSession()
         if session_cookie:
@@ -112,7 +112,7 @@ class SocketIoSession:
         response = await self.session.request(method, url, timeout=timeout, **kwargs)
         return ResponseAdapter(response)
 
-    async def ws_connect(self, url: str, *, headers: Optional[dict] = None, timeout=None, verify: bool = True) -> WebSocketAdapter:
+    async def ws_connect(self, url: str, *, headers: dict | None = None, timeout=None, verify: bool = True) -> WebSocketAdapter:
         return WebSocketAdapter(await self.session.get(url, headers=headers, stream=True, timeout=None, verify=verify))
 
 class SocketIoEngineClient(engineio.AsyncClient):
@@ -218,7 +218,7 @@ class SocketIoClient(AsyncClient):
 class SocketIoSimpleClient(AsyncSimpleClient):
     client_class = SocketIoClient
 
-async def close_socketio_client(sio: Optional[SocketIoSimpleClient], http_session: Optional[SocketIoSession]):
+async def close_socketio_client(sio: SocketIoSimpleClient | None, http_session: SocketIoSession | None):
     if sio is not None and sio.client is not None:
         engine_client = sio.client.eio
         engine_client.state = 'disconnected'

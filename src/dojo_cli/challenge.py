@@ -7,7 +7,6 @@ from pathlib import Path
 import re
 from rich.markdown import Markdown
 import string
-from typing import Optional
 
 from .client import get_remote_client
 from .http import request
@@ -49,7 +48,7 @@ def parse_challenge_path(challenge_id: str, chal_data: dict = {}) -> tuple:
     result = re.findall(r'/?([\-\~\w]+)/([\-\w]+)/([\-\w]+)', challenge_id)
     return result[0] if result else tuple()
 
-def get_challenge_num_id(dojo_id: Optional[str], module_id: Optional[str], challenge_id: Optional[str]) -> int:
+def get_challenge_num_id(dojo_id: str | None, module_id: str | None, challenge_id: str | None) -> int:
     if dojo_id and module_id and challenge_id:
         response = request(f'/{dojo_id}/{module_id}', False, False)
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -62,7 +61,7 @@ def get_challenge_num_id(dojo_id: Optional[str], module_id: Optional[str], chall
                     return int(str(input_challenge_id['value']))
     return -1
 
-def get_challenge_info(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None):
+def get_challenge_info(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None):
     account_id = request('/users/me').json().get('id')
     if account_id is None:
         error('Please login first or run this in the dojo.')
@@ -97,7 +96,7 @@ def get_challenge_info(dojo_id: Optional[str] = None, module_id: Optional[str] =
 def serialize_flag(account_id: int, challenge_id: int) -> str:
     return URLSafeSerializer('').dumps([account_id, challenge_id])[::-1]
 
-def deserialize_flag(flag: str) -> Optional[list[int]]:
+def deserialize_flag(flag: str) -> list[int] | None:
     return URLSafeSerializer('').loads_unsafe(re.sub('.+?{(.+)}', r'\1', flag)[::-1])[1]
 
 def get_flag_size() -> int:
@@ -120,7 +119,7 @@ def get_flag_size() -> int:
 
     return -1
 
-def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None, auth: bool = False, official: bool = False, simple: bool = False):
+def show_list(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None, auth: bool = False, official: bool = False, simple: bool = False):
     if not dojo_id:
         dojos = request('/dojos', auth=auth).json().get('dojos')
         sorted_dojos = sorted(filter(lambda dojo: dojo['id'] in DOJO_IDS, dojos), key=lambda dojo: DOJO_IDS.index(dojo['id']))
@@ -218,7 +217,7 @@ def show_list(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
 
     show_table(table_data, table_title, table_keys, show_lines=True)
 
-def init_challenge(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None, normal: bool = False, privileged: bool = False):
+def init_challenge(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None, normal: bool = False, privileged: bool = False):
     chal_data = request('/docker').json()
 
     if not challenge_id:
@@ -301,7 +300,7 @@ def show_status():
     else:
         fail(docker_response.get('error'))
 
-def show_hint(dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None):
+def show_hint(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None):
     (dojo_id, module_id, challenge_id), (account_id, challenge_num_id) = get_challenge_info(dojo_id, module_id, challenge_id)
 
     fake_flag = serialize_flag(account_id, challenge_num_id)
@@ -327,7 +326,7 @@ def show_hint(dojo_id: Optional[str] = None, module_id: Optional[str] = None, ch
         info(f'Excluding the final newline, the flag is about {flag_length} characters long.')
         info(f'You would only need to figure out the middle {fake_flag.index('.')} characters of the flag.')
 
-def submit_flag(flag: Optional[str] = None, dojo_id: Optional[str] = None, module_id: Optional[str] = None, challenge_id: Optional[str] = None):
+def submit_flag(flag: str | None = None, dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None):
     (dojo_id, module_id, challenge_id), (account_id, challenge_num_id) = get_challenge_info(dojo_id, module_id, challenge_id)
 
     while not flag:

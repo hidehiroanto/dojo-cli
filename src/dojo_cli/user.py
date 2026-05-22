@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta
 from getpass import getpass
 import re
-from typing import Optional
 
 from bs4 import BeautifulSoup
 from niquests import Session
@@ -22,7 +21,7 @@ def get_session_cookie(session: Session) -> str:
     error('Failed to find session cookie.')
     raise RuntimeError('unreachable')
 
-def do_register(username: Optional[str] = None, email: Optional[str] = None, password: Optional[str] = None):
+def do_register(username: str | None = None, email: str | None = None, password: str | None = None):
     while not username:
         username = input('Enter username: ')
     while not email:
@@ -42,7 +41,7 @@ def do_register(username: Optional[str] = None, email: Optional[str] = None, pas
             save_cookie({'session': get_session_cookie(session)})
             success(f'Registered and logged in as user [b green]{username}[/]!')
 
-def do_login(username: Optional[str] = None, password: Optional[str] = None):
+def do_login(username: str | None = None, password: str | None = None):
     while not username:
         username = input('Enter username or email: ')
     while not password:
@@ -121,7 +120,7 @@ def show_me(simple: bool = False):
     keys = ['rank', 'id', 'handle', 'belt', 'email', 'website', 'affiliation', 'country', 'bracket', 'date_ascended', 'score']
     show_table(account, 'Account Info', keys)
 
-def show_score(username: Optional[str] = None):
+def show_score(username: str | None = None):
     if not username:
         me = request('/users/me')
         if me.ok:
@@ -138,7 +137,7 @@ def show_score(username: Optional[str] = None):
         'score': f'[b cyan]{fields[1]}/{fields[2]}[/]'
     }, 'Global ranking')
 
-def show_activity(user_id: Optional[int] = None):
+def show_activity(user_id: int | None = None):
     if user_id is None:
         user_id = request('/users/me').json().get('id')
     if user_id < 0:
@@ -206,7 +205,7 @@ def get_wechall_rankings(page: int = 1, simple: bool = False):
 
     return wechall_data
 
-def show_scoreboard(dojo_id: Optional[str] = None, module_id: Optional[str] = None, duration: str = 'all', page: int = 1, simple: bool = False):
+def show_scoreboard(dojo_id: str | None = None, module_id: str | None = None, duration: str = 'all', page: int = 1, simple: bool = False):
     if dojo_id:
         durations = {'week': 7, 'month': 30, 'all': 0}
         endpoint = f'/scoreboard/{dojo_id}/{module_id or '_'}/{durations.get(duration.lower(), 0)}/{page}'
@@ -241,7 +240,7 @@ def show_scoreboard(dojo_id: Optional[str] = None, module_id: Optional[str] = No
     else:
         show_table(get_wechall_rankings(page, simple), 'WeChall rankings')
 
-def show_belts(belt: Optional[str] = None, page: Optional[int] = None, simple: bool = False):
+def show_belts(belt: str | None = None, page: int | None = None, simple: bool = False):
     response = request('/belts', auth=False).json()
 
     render_image = not simple and can_render_image()

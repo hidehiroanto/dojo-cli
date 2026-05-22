@@ -5,7 +5,7 @@
 import inspect
 from pathlib import Path
 import re
-from typing import Annotated, Any, Callable, Iterable, Optional, get_args, get_origin
+from typing import Annotated, Any, Callable, Iterable, get_args, get_origin
 
 import click
 from cyclopts import App as CycloptsApp
@@ -96,7 +96,7 @@ class CustomParameterControls(ParameterControls):
 
         assert isinstance(argument_type, click.types.ParamType)
         label = self._make_command_form_control_label(name, argument_type, is_option, schema.required, multiple=multiple)
-        first_focus_control: Optional[Widget] = None
+        first_focus_control: Widget | None = None
 
         with ControlGroupsContainer():
             # See https://github.com/Textualize/trogon/pull/123
@@ -157,7 +157,7 @@ class CustomParameterControls(ParameterControls):
     @staticmethod
     def make_checkbox_control(
         default: MultiValueParamData,
-        label: Optional[Text],
+        label: Text | None,
         multiple: bool,
         schema: OptionSchema | ArgumentSchema,
         control_id: str,
@@ -264,16 +264,16 @@ class CustomTrogon(Trogon):
     def get_default_screen(self) -> CustomCommandBuilder:
         return CustomCommandBuilder(self.cli, self.app_name, self.command_name)
 
-def normalize_markdown(text: Optional[str]) -> Optional[str]:
+def normalize_markdown(text: str | None) -> str | None:
     return inspect.cleandoc(text).strip() if text else text
 
-def markdown_summary(text: Optional[str]) -> str:
+def markdown_summary(text: str | None) -> str:
     return re.split(r'\n\s*\n', normalize_markdown(text) or '', maxsplit=1)[0].strip()
 
-def render_markdown(text: Optional[str]) -> RichMarkdown:
+def render_markdown(text: str | None) -> RichMarkdown:
     return RichMarkdown(normalize_markdown(text) or '')
 
-def default_for(argument) -> Optional[Any]:
+def default_for(argument) -> Any | None:
     default = argument.field_info.default
     if default is argument.field_info.empty:
         return None
@@ -384,7 +384,7 @@ def iter_visible_commands(app: CycloptsApp) -> Iterable[tuple[str, CycloptsApp]]
 
         yield command_name, command_app
 
-def build_click_proxy(app: CycloptsApp, command_name: Optional[str] = None) -> click.Command | click.Group:
+def build_click_proxy(app: CycloptsApp, command_name: str | None = None) -> click.Command | click.Group:
     subcommands = list(iter_visible_commands(app))
     params = build_click_params(app)
     help_text = normalize_markdown(app.help) or None

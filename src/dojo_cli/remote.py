@@ -10,7 +10,6 @@ import subprocess
 import sys
 import termios
 import tty
-from typing import Optional
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
@@ -131,7 +130,7 @@ def print_file(path: Path):
         except PermissionError:
             error(f'Permission to read {apply_style(path)} denied.')
 
-def edit_path(editor: str, path: Optional[Path] = None):
+def edit_path(editor: str, path: Path | None = None):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         if not path:
             if editor not in ['nano']:
@@ -152,11 +151,11 @@ def edit_path(editor: str, path: Optional[Path] = None):
         run_cmd(shlex.join([editor, str(path)]) if path else editor)
 
 def run_openssh(
-    command: Optional[str] = None,
+    command: str | None = None,
     capture_output: bool = False,
-    payload: Optional[bytes] = None,
+    payload: bytes | None = None,
     pty: bool = True
-) -> Optional[bytes]:
+) -> bytes | None:
     ssh = Path(which('ssh') or '/usr/bin/ssh')
     if not ssh.is_file():
         error('Please install OpenSSH first.')
@@ -186,11 +185,11 @@ def run_openssh(
         return completed_process.stdout
 
 def run_paramiko(
-    command: Optional[str] = None,
+    command: str | None = None,
     capture_output: bool = False,
-    payload: Optional[bytes] = None,
+    payload: bytes | None = None,
     pty: bool = True
-) -> Optional[bytes]:
+) -> bytes | None:
     with get_remote_client().get_channel() as channel:
         try:
             stdin_fd = sys.stdin.fileno()
@@ -285,12 +284,12 @@ def run_paramiko(
             return output
 
 def run_cmd(
-    command: Optional[str] = None,
+    command: str | None = None,
     capture_output: bool = False,
-    payload: Optional[bytes] = None,
+    payload: bytes | None = None,
     pty: bool = True,
     client_type: str = 'paramiko'
-) -> Optional[bytes]:
+) -> bytes | None:
     """Run a command on the remote server. If capture_output is True, the standard out bytes are returned."""
 
     if client_type == 'local' or 'DOJO_AUTH_TOKEN' in os.environ:
@@ -306,7 +305,7 @@ def run_cmd(
     else:
         error(f'Invalid client type: {client_type}')
 
-def download_file(remote_path: Path, local_path: Optional[Path] = None, log_success: bool = True):
+def download_file(remote_path: Path, local_path: Path | None = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
@@ -329,7 +328,7 @@ def download_file(remote_path: Path, local_path: Optional[Path] = None, log_succ
     if log_success:
         success(f'Downloaded {remote_path} to {local_path}')
 
-def upload_file(local_path: Path, remote_path: Optional[Path] = None, log_success: bool = True):
+def upload_file(local_path: Path, remote_path: Path | None = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):

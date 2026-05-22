@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
-from typing import Optional, cast
+from typing import cast
 
 from itsdangerous import URLSafeTimedSerializer
 from niquests import Session
@@ -12,10 +12,10 @@ from niquests import Session
 from .config import load_user_config
 from .log import error
 
-session_cache: Optional[Session] = None
-cookie_cache: Optional[dict] = None
-cookie_cache_path: Optional[Path] = None
-cookie_cache_mtime: Optional[int] = None
+session_cache: Session | None = None
+cookie_cache: dict | None = None
+cookie_cache_path: Path | None = None
+cookie_cache_mtime: int | None = None
 
 def get_session() -> Session:
     global session_cache
@@ -36,7 +36,7 @@ def delete_cookie():
     cookie_path.unlink()
     clear_cookie_cache()
 
-def load_cookie(cookie_path: Path) -> Optional[dict]:
+def load_cookie(cookie_path: Path) -> dict | None:
     if not cookie_path.is_file():
         error('You are not logged in.')
     try:
@@ -71,7 +71,7 @@ def save_cookie(cookie_jar: dict):
     cookie_path.write_text(json.dumps(cookie_jar))
     clear_cookie_cache()
 
-def deserialize_auth_token(auth_token: str) -> Optional[list[int | str]]:
+def deserialize_auth_token(auth_token: str) -> list[int | str] | None:
     token_prefix = 'sk-workspace-local-'
     if auth_token.startswith(token_prefix):
         token_data = URLSafeTimedSerializer('').loads_unsafe(auth_token[len(token_prefix):])[1]

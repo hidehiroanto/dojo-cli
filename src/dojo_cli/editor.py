@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 from shutil import which
 import subprocess
-from typing import Optional
 
 import mfusepy as fuse
 
@@ -30,7 +29,7 @@ SUPPORTED_EDITORS = {
     'Cursor': {'cli': 'cursor', 'brew': {'casks': ['cursor']}},
     'Eclipse Theia': {'cli': '/Applications/TheiaIDE.app/Contents/MacOS/TheiaIDE', 'brew': {'casks': ['theiaide']}},
     'Emacs': {'cli': 'emacs', 'brew': {'formulae': ['emacs']}},
-    'Google Antigravity': {'cli': 'agy', 'brew': {'casks': ['antigravity']}},
+    'Google Antigravity IDE': {'cli': 'agy-ide', 'brew': {'casks': ['antigravity-ide']}},
     'Helix': {'cli': 'hx', 'brew': {'formulae': ['helix']}},
     'Kakoune': {'cli': 'kak', 'brew': {'formulae': ['kakoune']}},
     'Lapce': {'cli': 'lapce', 'brew': {'casks': ['lapce']}},
@@ -47,7 +46,7 @@ SUPPORTED_EDITORS = {
     'Zed': {'cli': 'zed', 'brew': {'casks': ['zed']}}
 }
 
-def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
+def mount_remote(mount_point: Path | None = None, mode: str = 'sshfs'):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
@@ -148,7 +147,7 @@ def mount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
 
     info(f'Run [b cyan]dojo umount -p {mount_point}[/] to unmount the filesystem.')
 
-def unmount_remote(mount_point: Optional[Path] = None, mode: str = 'sshfs'):
+def unmount_remote(mount_point: Path | None = None, mode: str = 'sshfs'):
     mount_point = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
 
     if UNAME_SYSTEM == 'Darwin':
@@ -181,7 +180,7 @@ def install_editor(editor):
         # TODO: Implement "manual" editor installation
         error(f'Please install {editor['cli']} manually.')
 
-def run_editor(editor_name: str, path: Optional[Path] = None, mount_point: Optional[Path] = None):
+def run_editor(editor_name: str, path: Path | None = None, mount_point: Path | None = None):
     cli = str(SUPPORTED_EDITORS[editor_name]['cli']) if editor_name in SUPPORTED_EDITORS else editor_name
     which_cli = which(cli)
 
@@ -205,7 +204,7 @@ def run_editor(editor_name: str, path: Optional[Path] = None, mount_point: Optio
 
     subprocess.run([cli_path, path_to_open])
 
-def init_editor(editor_name: Optional[str] = None, path: Optional[Path] = None, mount_point: Optional[Path] = None):
+def init_editor(editor_name: str | None = None, path: Path | None = None, mount_point: Path | None = None):
     if not editor_name:
         editor_name = load_user_config()['editor']
 

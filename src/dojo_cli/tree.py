@@ -5,7 +5,6 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Label, Markdown, MarkdownViewer, Tree
-from typing import Optional
 
 from .http import request
 from .challenge import DOJO_IDS
@@ -84,9 +83,9 @@ class TreeApp(App):
 
     def __init__(
         self,
-        dojo_id: Optional[str] = None,
-        module_id: Optional[str] = None,
-        challenge_id: Optional[str] = None,
+        dojo_id: str | None = None,
+        module_id: str | None = None,
+        challenge_id: str | None = None,
         auth: bool = False,
         official: bool = False
     ):
@@ -223,9 +222,9 @@ class TreeApp(App):
             self.push_screen(StartChallengeModal(node_data['dojo'], node_data['module'], node_data['challenge'], practice))
 
 def init_tree(
-    dojo_id: Optional[str] = None,
-    module_id: Optional[str] = None,
-    challenge_id: Optional[str] = None,
+    dojo_id: str | None = None,
+    module_id: str | None = None,
+    challenge_id: str | None = None,
     auth: bool = False,
     official: bool = False
 ):

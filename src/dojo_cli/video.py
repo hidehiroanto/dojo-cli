@@ -3,7 +3,6 @@
 from pathlib import Path
 from shutil import which
 import subprocess
-from typing import Optional
 import yt_dlp
 
 from .config import load_user_config
@@ -56,7 +55,7 @@ def play_twitch(channel: str):
     else:
         error(f'Unsupported platform: {UNAME_SYSTEM}')
 
-def play_youtube(video_id: str, playlist_id: Optional[str] = None):
+def play_youtube(video_id: str, playlist_id: str | None = None):
     user_config = load_user_config()
     package_manager = user_config['package_manager'][UNAME_SYSTEM]
 
@@ -104,12 +103,12 @@ def init_twitch():
     play_twitch('pwncollege')
 
 def init_youtube(
-    video_id: Optional[str] = None,
-    playlist_id: Optional[str] = None,
-    dojo_id: Optional[str] = None,
-    module_id: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    page: Optional[int] = None,
+    video_id: str | None = None,
+    playlist_id: str | None = None,
+    dojo_id: str | None = None,
+    module_id: str | None = None,
+    resource_id: str | None = None,
+    page: int | None = None,
     simple: bool = False
 ):
     if video_id is not None:
