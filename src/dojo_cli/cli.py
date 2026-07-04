@@ -528,6 +528,7 @@ def edit(
     Supported editors include:
         'CodeEdit' (macOS only, very broken)
         'Cursor'
+        'Devin Desktop'
         'Eclipse Theia' (macOS only for now)
         'Emacs'
         'Google Antigravity IDE'
@@ -543,7 +544,6 @@ def edit(
         'Vim'
         'Visual Studio Code'
         'VSCodium'
-        'Windsurf'
         'Zed'
     If no mount point is specified, it defaults to the configured mount point.
 
@@ -599,6 +599,21 @@ def cursor(
     """
     from .editor import init_editor
     init_editor('Cursor', path, mount_point)
+
+@app.command(group=remote_edit)
+def devin(
+    path: Path | None = None, /, *,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
+):
+    """
+    Mount the current challenge locally and open it in Devin Desktop.
+
+    Args:
+        path (Path | None): The path to open, relative to the mount point.
+        mount_point (ResolvedDirectory | None): Path of the mount point.
+    """
+    from .editor import init_editor
+    init_editor('Devin Desktop', path, mount_point)
 
 @app.command(group=remote_edit)
 def emacs(path: Path | None = None, /):
@@ -787,21 +802,6 @@ def vscodium(
     """
     from .editor import init_editor
     init_editor('VSCodium', path, mount_point)
-
-@app.command(alias='surf', group=remote_edit)
-def windsurf(
-    path: Path | None = None, /, *,
-    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None
-):
-    """
-    Mount the current challenge locally and open it in Windsurf.
-
-    Args:
-        path (Path | None): The path to open, relative to the mount point.
-        mount_point (ResolvedDirectory | None): Path of the mount point.
-    """
-    from .editor import init_editor
-    init_editor('Windsurf', path, mount_point)
 
 @app.command(group=remote_edit)
 def zed(*,

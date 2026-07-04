@@ -27,6 +27,7 @@ SUPPORTED_EDITORS = {
         'brew': {'formulae': ['codeedit-cli'], 'casks': ['codeedit'], 'taps': ['codeeditapp/formulae']}
     },
     'Cursor': {'cli': 'cursor', 'brew': {'casks': ['cursor']}},
+    'Devin Desktop': {'cli': 'devin-desktop', 'brew': {'casks': ['devin-desktop']}},
     'Eclipse Theia': {'cli': '/Applications/TheiaIDE.app/Contents/MacOS/TheiaIDE', 'brew': {'casks': ['theiaide']}},
     'Emacs': {'cli': 'emacs', 'brew': {'formulae': ['emacs']}},
     'Google Antigravity IDE': {'cli': 'agy-ide', 'brew': {'casks': ['antigravity-ide']}},
@@ -42,7 +43,6 @@ SUPPORTED_EDITORS = {
     'Vim': {'cli': 'vim', 'brew': {'formulae': ['vim']}},
     'Visual Studio Code': {'cli': 'code', 'brew': {'casks': ['visual-studio-code']}},
     'VSCodium': {'cli': 'codium', 'brew': {'casks': ['vscodium']}},
-    'Windsurf': {'cli': 'windsurf', 'brew': {'casks': ['windsurf']}},
     'Zed': {'cli': 'zed', 'brew': {'casks': ['zed']}}
 }
 
