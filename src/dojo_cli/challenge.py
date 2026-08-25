@@ -1,18 +1,26 @@
 """Handles challenge initialization and flag submission."""
 
+import os
+import re
+import string
+from pathlib import Path
+
 from bs4 import BeautifulSoup
 from itsdangerous import URLSafeSerializer
-import os
-from pathlib import Path
-import re
 from rich.markdown import Markdown
-import string
 
 from .client import get_remote_client
 from .http import request
 from .log import error, fail, info, success, warn
 from .terminal import apply_style
-from .utils import can_render_image, download_image, fix_markdown_links, get_belt_hex, show_table
+from .utils import (
+    can_render_image,
+    download_image,
+    fix_markdown_links,
+    get_belt_hex,
+    require_item,
+    show_table,
+)
 
 DOJO_IDS = [
     'welcome',
@@ -37,16 +45,19 @@ DOJO_IDS = [
     'xnu'
 ]
 
-def parse_challenge_path(challenge_id: str, chal_data: dict = {}) -> tuple:
+def parse_challenge_path(challenge_id: str, chal_data: dict | None = None) -> tuple:
     if re.fullmatch(r'[\-\w]+', challenge_id):
         if not chal_data:
             chal_data = request('/docker').json()
         if chal_data.get('success'):
             return chal_data.get('dojo'), chal_data.get('module'), challenge_id
-        return tuple()
+        return ()
 
-    result = re.findall(r'/?([\-\~\w]+)/([\-\w]+)/([\-\w]+)', challenge_id)
-    return result[0] if result else tuple()
+    parts = challenge_id.strip('/').split('/')
+    patterns = (r'[-~\w]+', r'[-\w]+', r'[-\w]+')
+    if len(parts) == 3 and all(re.fullmatch(pattern, part) for pattern, part in zip(patterns, parts)):
+        return tuple(parts)
+    return ()
 
 def get_challenge_num_id(dojo_id: str | None, module_id: str | None, challenge_id: str | None) -> int:
     if dojo_id and module_id and challenge_id:
@@ -168,7 +179,7 @@ def show_list(dojo_id: str | None = None, module_id: str | None = None, challeng
 
     elif not challenge_id:
         modules = request(f'/dojos/{dojo_id}/modules', auth=auth).json().get('modules')
-        module = next(filter(lambda module: module['id'] == module_id, modules))
+        module = require_item(modules, module_id, 'Module')
         resources = list(filter(lambda resource: resource['type'] != 'header', module['resources']))
 
         if resources:
@@ -206,8 +217,8 @@ def show_list(dojo_id: str | None = None, module_id: str | None = None, challeng
             })
     else:
         modules = request(f'/dojos/{dojo_id}/modules', auth=auth).json().get('modules')
-        challenges = next(filter(lambda module: module['id'] == module_id, modules)).get('challenges')
-        table_data = next(filter(lambda challenge: challenge['id'] == challenge_id, challenges))
+        challenges = require_item(modules, module_id, 'Module').get('challenges', [])
+        table_data = require_item(challenges, challenge_id, 'Challenge')
         table_title = f'Challenge Info for {dojo_id}/{module_id}/{challenge_id}'
         table_keys = ['id', 'name', 'description']
 

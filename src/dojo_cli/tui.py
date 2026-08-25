@@ -3,28 +3,41 @@
 # TODO: rename to trogon_tui.py or something when/if I add more TUIs
 
 import inspect
-from pathlib import Path
 import re
-from typing import Annotated, Any, Callable, Iterable, get_args, get_origin
+from collections.abc import Callable, Iterable
+from pathlib import Path
+from typing import Annotated, Any, get_args, get_origin
 
 import click
 from cyclopts import App as CycloptsApp
-
 from rich.console import Group
 from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
-
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.content import Content
 from textual.css.query import NoMatches
 from textual.widget import Widget
-from textual.widgets import Button, Checkbox, ContentSwitcher, Input, Label, Static, Tab, Tabs
+from textual.widgets import (
+    Button,
+    Checkbox,
+    ContentSwitcher,
+    Input,
+    Label,
+    Static,
+    Tab,
+    Tabs,
+)
 from textual.widgets.tree import TreeNode
-
 from trogon.detect_run_string import detect_run_string
 from trogon.introspect import ArgumentSchema, MultiValueParamData, OptionSchema
-from trogon.trogon import CommandBuilder, CommandForm, CommandInfo, CommandSchema, Trogon
+from trogon.trogon import (
+    CommandBuilder,
+    CommandForm,
+    CommandInfo,
+    CommandSchema,
+    Trogon,
+)
 from trogon.widgets.command_info import CommandMetadata
 from trogon.widgets.multiple_choice import NonFocusableVerticalScroll
 from trogon.widgets.parameter_controls import (
@@ -32,8 +45,9 @@ from trogon.widgets.parameter_controls import (
     ControlGroupsContainer,
     ControlWidgetType,
     ParameterControls,
-    ValueNotSupplied
+    ValueNotSupplied,
 )
+
 
 # The default checkbox values were blue X for unchecked and green X for checked, not good for colorblind users.
 class CustomCheckbox(Checkbox):
@@ -318,8 +332,8 @@ def is_positional(argument) -> bool:
     return field_info.kind in (field_info.POSITIONAL_ONLY, field_info.VAR_POSITIONAL) or argument.index is not None
 
 def option_decls(argument) -> list[str]:
-    names = list(argument.parameter.name or ())
-    negatives = list(argument.negatives)
+    names = [str(name) for name in argument.parameter.name or ()]
+    negatives = [str(name) for name in argument.negatives]
 
     if not argument.is_flag() or not negatives:
         return names
@@ -369,8 +383,10 @@ def build_click_params(app: CycloptsApp) -> list[click.Parameter]:
         return []
 
     arguments = [argument for argument in app.assemble_argument_collection(parse_docstring=True) if argument.show]
-    params: list[click.Parameter] = [build_click_argument(argument) for argument in arguments if is_positional(argument)]
-    return params + [build_click_argument(argument) for argument in arguments if not is_positional(argument)]
+    params: list[click.Parameter] = []
+    for argument in arguments:
+        params.append(build_click_argument(argument) if is_positional(argument) else build_click_option(argument))
+    return params
 
 def iter_visible_commands(app: CycloptsApp) -> Iterable[tuple[str, CycloptsApp]]:
     hidden_names = {*app.help_flags, *app.version_flags}

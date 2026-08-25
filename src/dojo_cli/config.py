@@ -1,13 +1,13 @@
 """Handles configuration. Configuration file can be either JSON or YAML for now, might add TOML later."""
 
-from copy import deepcopy
 import json
 import os
-from pathlib import Path
 import sys
+from copy import deepcopy
+from pathlib import Path
 
-from rich import print as rprint
 import yaml
+from rich import print as rprint
 
 from .constants import SSH_HOME, XDG_CACHE_HOME, XDG_CONFIG_HOME, XDG_DATA_HOME
 
@@ -89,19 +89,19 @@ def load_config(config_path: Path):
         if not config_data:
             return {}
         return yaml.safe_load(config_data)
-    except Exception as e:
+    except (OSError, yaml.YAMLError) as e:
         rprint(f'[[on red]ERROR[/]] Error loading config file at [b]{config_path}[/]: {e}', file=sys.stderr)
-        exit(1)
+        sys.exit(1)
 
 def deepmerge(dst_dict: dict, src_dict: dict) -> dict:
     final_dict = deepcopy(dst_dict)
-    for key in src_dict:
-        if key in dst_dict and isinstance(dst_dict[key], dict) and isinstance(src_dict[key], dict):
-            final_dict[key] = deepmerge(dst_dict[key], src_dict[key])
-        elif key in dst_dict and isinstance(dst_dict[key], list) and isinstance(src_dict[key], list):
-            final_dict[key] = sorted(list(set(deepcopy(dst_dict[key]) + deepcopy(src_dict[key]))))
+    for key, value in src_dict.items():
+        if key in dst_dict and isinstance(dst_dict[key], dict) and isinstance(value, dict):
+            final_dict[key] = deepmerge(dst_dict[key], value)
+        elif key in dst_dict and isinstance(dst_dict[key], list) and isinstance(value, list):
+            final_dict[key] = sorted(set(deepcopy(dst_dict[key]) + deepcopy(value)))
         else:
-            final_dict[key] = deepcopy(src_dict[key])
+            final_dict[key] = deepcopy(value)
     return final_dict
 
 def load_user_config() -> dict:

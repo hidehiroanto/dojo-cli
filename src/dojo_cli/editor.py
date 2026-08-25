@@ -4,17 +4,25 @@
 # TODO: Move mount stuff to client.py or mount.py?
 
 import os
-from pathlib import Path
-from shutil import which
 import subprocess
+from pathlib import Path
 
 import mfusepy as fuse
 
 from .client import RemoteClient
 from .config import load_user_config
-from .constants import UNAME_SYSTEM
+from .constants import UNAME_SYSTEM, XDG_BIN_HOME
 from .http import request
-from .install import homebrew_install, nanobrew_install, wax_install, zerobrew_install
+from .install import (
+    configured_package_manager,
+    confirm_install,
+    find_executable,
+    homebrew_install,
+    nanobrew_install,
+    package_manager_install,
+    require_executable,
+    wax_install,
+)
 from .log import error, info, warn
 
 USR_BIN_DIR = Path('/usr/bin')
@@ -46,6 +54,36 @@ SUPPORTED_EDITORS = {
     'Zed': {'cli': 'zed', 'brew': {'casks': ['zed']}}
 }
 
+def executable_fallbacks(cli: str) -> list[Path]:
+    """Return the standard fallback paths for a local executable."""
+    cli_path = Path(cli)
+    if cli_path.is_absolute():
+        return [cli_path]
+    return [XDG_BIN_HOME / cli, USR_LOCAL_BIN_DIR / cli, USR_BIN_DIR / cli]
+
+def install_sshfs():
+    """Install SSHFS using the configured package manager."""
+    package_manager = configured_package_manager()
+    if UNAME_SYSTEM == 'Darwin':
+        if package_manager == 'homebrew':
+            homebrew_install(casks=['fuse-t-sshfs'], taps=['macos-fuse-t/cask'])
+        elif package_manager == 'nanobrew':
+            nanobrew_install(casks=['macos-fuse-t/cask/fuse-t-sshfs'])
+        elif package_manager == 'wax':
+            warn('Wax cannot find the fuse-t-sshfs cask for some reason, falling back to Homebrew.')
+            homebrew_install(casks=['fuse-t-sshfs'], taps=['macos-fuse-t/cask'])
+        elif package_manager == 'zerobrew':
+            warn('Zerobrew does not support installing taps or casks yet, falling back to Homebrew.')
+            homebrew_install(casks=['fuse-t-sshfs'], taps=['macos-fuse-t/cask'])
+        else:
+            error('Please install fuse-t-sshfs manually.')
+    elif UNAME_SYSTEM == 'Linux':
+        package_manager_install(formulae=['sshfs'], packages=['sshfs'])
+    elif UNAME_SYSTEM == 'Windows':
+        error('Windows is not yet supported.')
+    else:
+        error('Your OS is not yet supported.')
+
 def mount_remote(mount_point: Path | None = None, mode: str = 'sshfs'):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
@@ -68,20 +106,22 @@ def mount_remote(mount_point: Path | None = None, mode: str = 'sshfs'):
 
     if mode == 'mfusepy':
         if UNAME_SYSTEM == 'Darwin':
-            # maybe use macfuse instead when macfuse 5.2 comes out without kext
-            info('Installing fuse-t...')
-            if package_manager == 'homebrew':
-                homebrew_install(casks=['fuse-t'], taps=['macos-fuse-t/cask'])
-            elif package_manager == 'nanobrew':
-                nanobrew_install(casks=['macos-fuse-t/cask/fuse-t'])
-            elif package_manager == 'wax':
-                wax_install(casks=['fuse-t'], taps=['macos-fuse-t/cask'])
-            elif package_manager == 'zerobrew':
-                warn('Zerobrew does not support installing casks yet, falling back to Homebrew')
-                homebrew_install(casks=['fuse-t'], taps=['macos-fuse-t/cask'])
-            else:
-                # TODO: Implement "manual" fuse-t installation
-                error('Please install fuse-t manually.')
+            if not Path('/Library/Frameworks/fuse_t.framework').is_dir():
+                confirm_install('fuse-t', package_manager)
+                info('Installing fuse-t...')
+                if package_manager == 'homebrew':
+                    homebrew_install(casks=['fuse-t'], taps=['macos-fuse-t/cask'])
+                elif package_manager == 'nanobrew':
+                    nanobrew_install(casks=['macos-fuse-t/cask/fuse-t'])
+                elif package_manager == 'wax':
+                    wax_install(casks=['fuse-t'], taps=['macos-fuse-t/cask'])
+                elif package_manager == 'zerobrew':
+                    warn('Zerobrew does not support installing casks yet, falling back to Homebrew')
+                    homebrew_install(casks=['fuse-t'], taps=['macos-fuse-t/cask'])
+                else:
+                    error('Please install fuse-t manually.')
+                if not Path('/Library/Frameworks/fuse_t.framework').is_dir():
+                    error('fuse-t is still missing after installation.')
         elif UNAME_SYSTEM == 'Linux':
             # libfuse should already be shipped by all major Linux distributions
             error('libfuse should already be shipped by all major Linux distributions. If not, install it manually.')
@@ -96,52 +136,26 @@ def mount_remote(mount_point: Path | None = None, mode: str = 'sshfs'):
         info('Unmounting the filesystem...')
 
     elif mode == 'sshfs':
-        if not Path(which('sshfs') or USR_LOCAL_BIN_DIR / 'sshfs').is_file():
-            if UNAME_SYSTEM == 'Darwin':
-                # maybe use macfuse + sshfs when macfuse 5.2 comes out without kext
-                info('Installing fuse-t-sshfs...')
-                if package_manager == 'homebrew':
-                    homebrew_install(casks=['fuse-t-sshfs'], taps=['macos-fuse-t/cask'])
-                elif package_manager == 'nanobrew':
-                    nanobrew_install(casks=['macos-fuse-t/cask/fuse-t-sshfs'])
-                elif package_manager == 'wax':
-                    warn('Wax cannot find the fuse-t-sshfs cask for some reason, falling back to Homebrew.')
-                    homebrew_install(casks=['fuse-t-sshfs'], taps=['macos-fuse-t/cask'])
-                elif package_manager == 'zerobrew':
-                    warn('Zerobrew does not support installing taps or casks yet, falling back to Homebrew.')
-                    homebrew_install(casks=['fuse-t-sshfs'], taps=['macos-fuse-t/cask'])
-                else:
-                    # TODO: Implement "manual" fuse-t-sshfs installation
-                    error('Please install fuse-t-sshfs manually.')
-            elif UNAME_SYSTEM == 'Linux':
-                # sshfs should already be shipped by all major Linux distributions
-                if package_manager == 'homebrew':
-                    homebrew_install(['sshfs'])
-                elif package_manager == 'nanobrew':
-                    nanobrew_install(['sshfs'])
-                elif package_manager == 'wax':
-                    wax_install(['sshfs'])
-                elif package_manager == 'zerobrew':
-                    zerobrew_install(['sshfs'])
-                else:
-                    # TODO: Implement "manual" sshfs installation
-                    error('Please install sshfs manually.')
-            elif UNAME_SYSTEM == 'Windows':
-                error('Windows is not yet supported.')
-            else:
-                error('Your OS is not yet supported.')
-
-        sshfs = Path(which('sshfs') or USR_LOCAL_BIN_DIR / 'sshfs')
+        sshfs = require_executable(
+            'sshfs',
+            executable_fallbacks('sshfs'),
+            display_name='SSHFS',
+            installer=install_sshfs,
+            method=package_manager,
+        )
         if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
-            subprocess.run([sshfs, '-F', ssh_config_file, f'{ssh_config['Host']}:{project_path}', mount_point])
+            subprocess.run(
+                [str(sshfs), '-F', str(ssh_config_file), f'{ssh_config['Host']}:{project_path}', str(mount_point)],
+                check=True,
+            )
         elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
             subprocess.run([
-                sshfs, '-p', str(ssh_config['Port']),
+                str(sshfs), '-p', str(ssh_config['Port']),
                 '-o', f'IdentityFile={ssh_identity_file}',
                 '-o', f'ServerAliveCountMax={ssh_config['ServerAliveCountMax']}',
                 '-o', f'ServerAliveInterval={ssh_config['ServerAliveInterval']}',
-                f'{ssh_config['User']}@{ssh_config['HostName']}:{project_path}', mount_point
-            ])
+                f'{ssh_config['User']}@{ssh_config['HostName']}:{project_path}', str(mount_point)
+            ], check=True)
         else:
             error('Something went wrong with the SSH config file or the SSH key, please make sure at least one is valid.')
 
@@ -151,48 +165,41 @@ def unmount_remote(mount_point: Path | None = None, mode: str = 'sshfs'):
     mount_point = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
 
     if UNAME_SYSTEM == 'Darwin':
-        subprocess.run(['diskutil', 'umount', 'force', mount_point])
+        subprocess.run(['diskutil', 'umount', 'force', str(mount_point)], check=True)
     elif UNAME_SYSTEM == 'Linux':
-        subprocess.run(['umount', '-f', mount_point])
+        subprocess.run(['umount', '-f', str(mount_point)], check=True)
     elif UNAME_SYSTEM == 'Windows':
-        subprocess.run(['net', 'use', mount_point, '/d', '/y'])
+        subprocess.run(['net', 'use', str(mount_point), '/d', '/y'], check=True)
     else:
         error(f'Unsupported platform: {UNAME_SYSTEM}')
 
-def install_editor(editor):
-    if which(editor['cli']) or (USR_LOCAL_BIN_DIR / editor['cli']).is_file() or (USR_BIN_DIR / editor['cli']).is_file():
-        info(f'{editor['cli']} is already installed.')
-        return
+def install_editor(editor_name: str, editor: dict) -> Path:
+    """Resolve a supported editor, installing it after confirmation if needed."""
+    cli = editor['cli']
+    package_manager = configured_package_manager()
 
-    package_manager = load_user_config()['package_manager'][UNAME_SYSTEM]
-    if package_manager == 'homebrew':
-        homebrew_install(editor['brew'].get('formulae'), editor['brew'].get('casks'), editor['brew'].get('taps'))
-    elif package_manager == 'nanobrew':
-        if 'taps' in editor['brew']:
-            error(f'Please install {editor['cli']} manually.')
-        nanobrew_install(editor['brew'].get('formulae'), editor['brew'].get('casks'))
-    elif package_manager == 'wax':
-        # Avoid using, wax cask installation is broken, IO error: Permission denied (os error 13)
-        wax_install(editor['brew'].get('formulae'), editor['brew'].get('casks'), editor['brew'].get('taps'))
-    elif package_manager == 'zerobrew':
-        zerobrew_install(editor['brew'].get('formulae'), editor['brew'].get('casks'), editor['brew'].get('taps'))
-    else:
-        # TODO: Implement "manual" editor installation
-        error(f'Please install {editor['cli']} manually.')
+    def installer():
+        if package_manager == 'nanobrew' and 'taps' in editor['brew']:
+            error(f'Please install {cli} manually.')
+        package_manager_install(
+            editor['brew'].get('formulae'),
+            editor['brew'].get('casks'),
+            editor['brew'].get('taps'),
+        )
+
+    return require_executable(
+        cli,
+        executable_fallbacks(cli),
+        display_name=editor_name,
+        installer=installer,
+        method=package_manager,
+    )
 
 def run_editor(editor_name: str, path: Path | None = None, mount_point: Path | None = None):
     cli = str(SUPPORTED_EDITORS[editor_name]['cli']) if editor_name in SUPPORTED_EDITORS else editor_name
-    which_cli = which(cli)
-
-    if which_cli:
-        cli_path = Path(which_cli)
-    elif (USR_LOCAL_BIN_DIR / cli).is_file():
-        cli_path = USR_LOCAL_BIN_DIR / cli
-    elif (USR_BIN_DIR / cli).is_file():
-        cli_path = USR_BIN_DIR / cli
-    else:
+    cli_path = find_executable(cli, executable_fallbacks(cli))
+    if cli_path is None:
         error(f'Editor {cli} not found.')
-        return
 
     path_to_open = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
 
@@ -202,7 +209,9 @@ def run_editor(editor_name: str, path: Path | None = None, mount_point: Path | N
     if editor_name in ['Kakoune', 'Micro', 'Nano'] and path_to_open.is_dir():
         error(f'{editor_name} does not support opening directories.')
 
-    subprocess.run([cli_path, path_to_open])
+    completed = subprocess.run([str(cli_path), str(path_to_open)], check=False)
+    if completed.returncode:
+        raise SystemExit(completed.returncode)
 
 def init_editor(editor_name: str | None = None, path: Path | None = None, mount_point: Path | None = None):
     if not editor_name:
@@ -211,7 +220,7 @@ def init_editor(editor_name: str | None = None, path: Path | None = None, mount_
     mount_remote(mount_point)
 
     if editor_name in SUPPORTED_EDITORS:
-        install_editor(SUPPORTED_EDITORS[editor_name])
+        install_editor(editor_name, SUPPORTED_EDITORS[editor_name])
 
     if UNAME_SYSTEM == 'Darwin':
         warn(f'You may see a popup like: [b yellow]{editor_name}.app would like to access files on a network volume.[/]')

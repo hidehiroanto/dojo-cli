@@ -1,14 +1,16 @@
 """Handles the tree view TUI."""
 
+from typing import ClassVar
+
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Label, Markdown, MarkdownViewer, Tree
 
-from .http import request
 from .challenge import DOJO_IDS
-from .utils import fix_markdown_links
+from .http import request
+from .utils import fix_markdown_links, require_item
 
 ROOT_LABEL = 'k/up: move up, j/down: move down, space: toggle, enter: select, ctrl+p: palette, ctrl+q: quit'
 ROOT_DESCRIPTION = """
@@ -19,6 +21,9 @@ ROOT_DESCRIPTION = """
 | k/up | Move the cursor up. |
 | j/down | Move the cursor down. |
 """
+
+class ChallengeStartError(RuntimeError):
+    """Raised when a challenge cannot be started."""
 
 class DescriptionViewer(MarkdownViewer):
     async def _on_markdown_link_clicked(self, message: Markdown.LinkClicked) -> None:
@@ -72,14 +77,14 @@ class StartChallengeModal(ModalScreen):
             if docker_response.get('success'):
                 self.app.exit()
             elif docker_response.get('error'):
-                raise Exception(docker_response['error'])
+                raise ChallengeStartError(docker_response['error'])
             else:
-                raise Exception('Failed to start challenge.')
+                raise ChallengeStartError('Failed to start challenge.')
         elif event.button.variant == 'error':
             self.dismiss()
 
 class TreeApp(App):
-    BINDINGS = [('k', 'cursor_up', 'Up'), ('j', 'cursor_down', 'Down')]
+    BINDINGS: ClassVar = [('k', 'cursor_up', 'Up'), ('j', 'cursor_down', 'Down')]
 
     def __init__(
         self,
@@ -104,7 +109,7 @@ class TreeApp(App):
                 self.data[dojo['id']] = {'data': dojo, 'modules': {}}
 
         elif not module_id:
-            dojo = next(filter(lambda dojo: dojo['id'] == dojo_id, sorted_dojos))
+            dojo = require_item(sorted_dojos, dojo_id, 'Dojo')
             self.data = {dojo_id: {'data': dojo, 'modules': {}}}
             modules = request(f'/dojos/{dojo_id}/modules', auth=auth).json().get('modules')
             for module in modules:
@@ -114,20 +119,20 @@ class TreeApp(App):
             self.loaded_modules.add(dojo_id)
 
         elif not challenge_id:
-            dojo = next(filter(lambda dojo: dojo['id'] == dojo_id, sorted_dojos))
+            dojo = require_item(sorted_dojos, dojo_id, 'Dojo')
             self.data = {dojo_id: {'data': dojo, 'modules': {}}}
             modules = request(f'/dojos/{dojo_id}/modules', auth=auth).json().get('modules')
-            module = next(filter(lambda module: module['id'] == module_id, modules))
+            module = require_item(modules, module_id, 'Module')
             self.data[dojo['id']]['modules'][module['id']] = {'data': module, 'unified_items': {}}
             for item in module['unified_items']:
                 self.data[dojo['id']]['modules'][module['id']]['unified_items'][item['id']] = {'data': item}
             self.loaded_modules.add(dojo_id)
 
         else:
-            dojo = next(filter(lambda dojo: dojo['id'] == dojo_id, sorted_dojos))
+            dojo = require_item(sorted_dojos, dojo_id, 'Dojo')
             self.data = {dojo_id: {'data': dojo, 'modules': {}}}
             modules = request(f'/dojos/{dojo_id}/modules', auth=auth).json().get('modules')
-            module = next(filter(lambda module: module['id'] == module_id, modules))
+            module = require_item(modules, module_id, 'Module')
             self.data[dojo['id']]['modules'][module['id']] = {'data': module, 'unified_items': {}}
             for item in module['unified_items']:
                 if item['item_type'] == 'resource' or item['item_type'] == 'challenge' and item['id'] == challenge_id:

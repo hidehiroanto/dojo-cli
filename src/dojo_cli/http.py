@@ -2,12 +2,15 @@
 
 import json
 import os
-from pathlib import Path
 import re
+import tempfile
+from pathlib import Path
 from typing import cast
+from urllib.parse import urlparse
 
 from itsdangerous import URLSafeTimedSerializer
 from niquests import Session
+from niquests.exceptions import RequestException
 
 from .config import load_user_config
 from .log import error
@@ -67,17 +70,38 @@ def get_cached_cookie(cookie_path: Path) -> dict:
 
 def save_cookie(cookie_jar: dict):
     cookie_path = Path(load_user_config()['cookie_path']).expanduser().resolve()
-    cookie_path.parent.mkdir(0o755, True, True)
-    cookie_path.write_text(json.dumps(cookie_jar))
+    cookie_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    cookie_path.parent.chmod(0o700)
+    with tempfile.NamedTemporaryFile('w', dir=cookie_path.parent, delete=False) as temp_file:
+        json.dump(cookie_jar, temp_file)
+        temporary = Path(temp_file.name)
+    try:
+        temporary.chmod(0o600)
+        temporary.replace(cookie_path)
+    finally:
+        temporary.unlink(missing_ok=True)
     clear_cookie_cache()
+
+def get_origin(url: str) -> tuple[str, str | None, int | None]:
+    """Return the scheme, hostname, and effective port for a URL."""
+    parsed = urlparse(url)
+    port = parsed.port
+    if port is None:
+        port = 443 if parsed.scheme == 'https' else 80 if parsed.scheme == 'http' else None
+    return parsed.scheme, parsed.hostname, port
 
 def deserialize_auth_token(auth_token: str) -> list[int | str] | None:
     token_prefix = 'sk-workspace-local-'
     if auth_token.startswith(token_prefix):
         token_data = URLSafeTimedSerializer('').loads_unsafe(auth_token[len(token_prefix):])[1]
-        if isinstance(token_data, list) and len(token_data) == 3:
-            if isinstance(token_data[0], int) and isinstance(token_data[1], str) and token_data[2] == 'cli-auth-token':
-                return token_data
+        if (
+            isinstance(token_data, list)
+            and len(token_data) == 3
+            and isinstance(token_data[0], int)
+            and isinstance(token_data[1], str)
+            and token_data[2] == 'cli-auth-token'
+        ):
+            return token_data
     return None
 
 def request(url: str, api: bool = True, auth: bool = True, csrf: bool = False, **kwargs):
@@ -89,7 +113,10 @@ def request(url: str, api: bool = True, auth: bool = True, csrf: bool = False, *
     base_url = user_config['base_url']
     headers = dict(kwargs.pop('headers', {}))
 
-    if not (url.startswith('http://') or url.startswith('https://')):
+    if url.startswith(('http://', 'https://')):
+        if auth and get_origin(url) != get_origin(base_url):
+            error('Refusing to send authentication to a different origin.')
+    else:
         url = base_url + (user_config['api'] if api else '') + url
 
     if auth:
@@ -123,7 +150,7 @@ def request(url: str, api: bool = True, auth: bool = True, csrf: bool = False, *
         if auth:
             kwargs.setdefault('allow_redirects', False)
         response = session.request(method, url, headers=headers, **kwargs)
-    except Exception as e:
+    except RequestException as e:
         error(f'Request failed: {e}')
     if auth and response.is_redirect:
         error('Session expired, please login again.')

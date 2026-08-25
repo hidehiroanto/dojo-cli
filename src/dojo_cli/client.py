@@ -1,14 +1,21 @@
 """This file contains the implementation of the RemoteClient class."""
 
 import errno
-import mfusepy as fuse
-from pathlib import Path
-from paramiko.channel import Channel
-from paramiko.client import AutoAddPolicy, SSHClient
-from paramiko.sftp_client import SFTPClient
+import os
 import stat
+from itertools import count
+from pathlib import Path
+from threading import RLock
+from typing import Self
+
+import mfusepy as fuse
+from paramiko.channel import Channel
+from paramiko.client import RejectPolicy, SSHClient
+from paramiko.sftp_client import SFTPClient
+from paramiko.sftp_file import SFTPFile
 
 from .config import load_user_config
+
 
 class RemoteClient(fuse.Operations):
     """
@@ -26,13 +33,16 @@ class RemoteClient(fuse.Operations):
 
         self.ssh = SSHClient()
         self.ssh.load_system_host_keys()
-        self.ssh.set_missing_host_key_policy(AutoAddPolicy())
+        self.ssh.set_missing_host_key_policy(RejectPolicy())
         self.ssh.connect(hostname, port, username, key_filename=str(key_filename))
         self.sftp: SFTPClient = self.ssh.open_sftp()
         self.sftp.chdir(str(self.project_path))
+        self.handles: dict[int, SFTPFile] = {}
+        self.handle_ids = count(1)
+        self.handle_lock = RLock()
         self.use_ns = True
 
-    def __enter__(self) -> RemoteClient:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc_val, traceback):
@@ -40,6 +50,11 @@ class RemoteClient(fuse.Operations):
 
     def close(self):
         global remote_client
+        with self.handle_lock:
+            handles = list(self.handles.values())
+            self.handles.clear()
+        for handle in handles:
+            handle.close()
         self.sftp.close()
         self.ssh.close()
         if remote_client is self:
@@ -55,9 +70,16 @@ class RemoteClient(fuse.Operations):
 
     @fuse.overrides(fuse.Operations)
     def create(self, path: str, mode, fi=None) -> int:
-        with self.sftp.open(path, 'w') as f:
-            f.chmod(mode)
-            return 0
+        handle = self.sftp.open(path, 'w+')
+        registered = False
+        try:
+            handle.chmod(mode)
+            handle_id = self.register_handle(handle)
+            registered = True
+            return handle_id
+        finally:
+            if not registered:
+                handle.close()
 
     @fuse.overrides(fuse.Operations)
     def destroy(self, path: str) -> None:
@@ -84,15 +106,38 @@ class RemoteClient(fuse.Operations):
 
     def getsize(self, path: str) -> int:
         try:
-            stat_result = self.sftp.stat(path)
+            stat_result = self.sftp.lstat(path)
             if stat.S_ISDIR(stat_result.st_mode):
                 return sum(self.getsize(str(Path(path) / child)) for child in self.sftp.listdir(path))
-            elif stat.S_ISREG(stat_result.st_mode):
+            elif stat.S_ISREG(stat_result.st_mode) or stat.S_ISLNK(stat_result.st_mode):
                 return stat_result.st_size
             else:
-                return -1
+                return 0
         except FileNotFoundError:
             return -1
+
+    @staticmethod
+    def mode_for_flags(flags: int) -> str:
+        """Convert POSIX open flags to a Paramiko file mode."""
+        access_mode = flags & os.O_ACCMODE
+        if flags & os.O_APPEND:
+            return 'a+' if access_mode == os.O_RDWR else 'a'
+        if flags & os.O_TRUNC:
+            return 'w+' if access_mode == os.O_RDWR else 'w'
+        if access_mode in (os.O_WRONLY, os.O_RDWR):
+            return 'r+'
+        return 'r'
+
+    def register_handle(self, handle: SFTPFile) -> int:
+        """Register an open SFTP file and return its FUSE handle ID."""
+        with self.handle_lock:
+            handle_id = next(self.handle_ids)
+            self.handles[handle_id] = handle
+        return handle_id
+
+    @fuse.overrides(fuse.Operations)
+    def open(self, path: str, flags: int) -> int:
+        return self.register_handle(self.sftp.open(path, self.mode_for_flags(flags)))
 
     def is_dir(self, path: str) -> bool:
         try:
@@ -129,13 +174,14 @@ class RemoteClient(fuse.Operations):
 
     @fuse.overrides(fuse.Operations)
     def read(self, path: str, size: int, offset: int, fh: int) -> bytes:
-        with self.sftp.open(path) as f:
-            f.seek(offset, 0)
-            return f.read(size)
+        with self.handle_lock:
+            handle = self.handles[fh]
+            handle.seek(offset, 0)
+            return handle.read(size)
 
-    def read_bytes(self, path: str) -> bytes:
+    def read_bytes(self, path: str, limit: int | None = None) -> bytes:
         with self.sftp.open(path) as f:
-            return f.read()
+            return f.read() if limit is None else f.read(limit)
 
     @fuse.overrides(fuse.Operations)
     def readdir(self, path: str, fh: int) -> fuse.ReadDirResult:
@@ -148,11 +194,15 @@ class RemoteClient(fuse.Operations):
     def remove(self, path: str):
         """This is identical to running: rm -r <path>"""
 
-        if self.is_dir(path):
-            for child in self.listdir(path):
+        try:
+            stat_result = self.sftp.lstat(path)
+        except FileNotFoundError:
+            return
+        if stat.S_ISDIR(stat_result.st_mode):
+            for child in self.sftp.listdir(path):
                 self.remove(str(Path(path) / child))
             self.sftp.rmdir(path)
-        elif self.is_file(path):
+        else:
             self.sftp.unlink(path)
 
     @fuse.overrides(fuse.Operations)
@@ -169,7 +219,12 @@ class RemoteClient(fuse.Operations):
 
     @fuse.overrides(fuse.Operations)
     def truncate(self, path: str, length: int, fh: int | None = None) -> int:
-        return self.sftp.truncate(path, length)
+        if fh is None:
+            self.sftp.truncate(path, length)
+        else:
+            with self.handle_lock:
+                self.handles[fh].truncate(length)
+        return 0
 
     @fuse.overrides(fuse.Operations)
     def unlink(self, path: str) -> int:
@@ -183,10 +238,28 @@ class RemoteClient(fuse.Operations):
 
     @fuse.overrides(fuse.Operations)
     def write(self, path: str, data: bytes, offset: int, fh: int) -> int:
-        with self.sftp.open(path, 'r+') as f:
-            f.seek(offset, 0)
-            f.write(data)
-            return len(data)
+        with self.handle_lock:
+            handle = self.handles[fh]
+            handle.seek(offset, 0)
+            handle.write(data)
+        return len(data)
+
+    @fuse.overrides(fuse.Operations)
+    def flush(self, path: str, fh: int) -> int:
+        with self.handle_lock:
+            self.handles[fh].flush()
+        return 0
+
+    @fuse.overrides(fuse.Operations)
+    def fsync(self, path: str, datasync: int, fh: int) -> int:
+        return self.flush(path, fh)
+
+    @fuse.overrides(fuse.Operations)
+    def release(self, path: str, fh: int) -> int:
+        with self.handle_lock:
+            handle = self.handles.pop(fh)
+        handle.close()
+        return 0
 
     def write_bytes(self, path: str, data: bytes) -> int:
         with self.sftp.open(path, 'w') as f:

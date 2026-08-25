@@ -1,20 +1,20 @@
 """Handles SensAI."""
 
-from collections import OrderedDict
 import os
-from pathlib import Path
 import re
 import shlex
-import socket
+from collections import OrderedDict
+from pathlib import Path
 from threading import Lock
 from time import monotonic
 
 from niquests import Session
 from niquests.cookies import create_cookie
+from niquests.exceptions import RequestException
 from rich import print as rprint
 from rich.markdown import Markdown as RichMarkdown
 from socketio import SimpleClient
-
+from socketio.exceptions import ConnectionError as SocketIOConnectionError
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll
 from textual.events import Key
@@ -25,8 +25,12 @@ from .client import get_remote_client
 from .config import load_user_config
 from .http import load_cookie, request
 from .log import error, fail, info, success, warn
-from .remote import run_cmd
-from .socketio_niquests import SocketIoSession, SocketIoSimpleClient, close_socketio_client
+from .remote import CommandResult, run_cmd
+from .socketio_niquests import (
+    SocketIoSession,
+    SocketIoSimpleClient,
+    close_socketio_client,
+)
 
 WELCOME_BANNER = r'''```
 __        __   _                            _
@@ -52,6 +56,50 @@ INSTRUCTIONS = r'''
 '''
 
 DEFAULT_SENSAI_TIMEOUT = 60.0
+MAX_FILE_CONTEXT_BYTES = 0x40000
+MAX_COMMAND_CONTEXT_BYTES = 0x40000
+MAX_TOTAL_CONTEXT_BYTES = 0x80000
+TRUNCATION_MARKER = '\n[truncated]\n'
+
+def limit_text(text: str, limit: int) -> str:
+    """Limit UTF-8 text to a byte budget and mark truncation."""
+    encoded = text.encode()
+    if len(encoded) <= limit:
+        return text
+    marker = TRUNCATION_MARKER.encode()
+    return encoded[:max(0, limit - len(marker))].decode(errors='replace') + TRUNCATION_MARKER
+
+def append_context(context: str, addition: str) -> str:
+    """Append text without exceeding the total SensAI context budget."""
+    return limit_text(context + addition, MAX_TOTAL_CONTEXT_BYTES)
+
+def format_file_context(remote_client, filename: str) -> str:
+    """Read and format a bounded local or remote file context entry."""
+    if remote_client.is_file(filename):
+        try:
+            data = remote_client.read_bytes(filename, MAX_FILE_CONTEXT_BYTES + 1)
+        except PermissionError:
+            return f'Permission denied: {filename}\n'
+    else:
+        path = Path(filename).expanduser()
+        if not path.is_file():
+            return f'File not found: {filename}\n'
+        if not os.access(path, os.R_OK):
+            return f'Permission denied: {filename}\n'
+        with path.open('rb') as file:
+            data = file.read(MAX_FILE_CONTEXT_BYTES + 1)
+
+    content = limit_text(data.decode(errors='replace'), MAX_FILE_CONTEXT_BYTES)
+    return f'BEGIN {filename}\n{content}\nEND {filename}\n'
+
+def format_command_context(command: str, result: CommandResult) -> str:
+    """Format bounded command status and output for SensAI context."""
+    context = f'Command input:\n{command}\nExit status: {result.returncode}\n'
+    if result.stdout:
+        context += f'Command stdout:\n{result.stdout.decode(errors='replace')}\n'
+    if result.stderr:
+        context += f'Command stderr:\n{result.stderr.decode(errors='replace')}\n'
+    return limit_text(context, MAX_COMMAND_CONTEXT_BYTES)
 
 SLASH_COMMANDS = {
     'exit': lambda app, *argv: app.exit(),
@@ -140,7 +188,7 @@ class SensaiApp(App):
             await response.close()
             self.sio = SocketIoSimpleClient(http_session=self.http_session)
             await self.sio.connect(self.base_url, transports=['websocket'], socketio_path='sensai/socket.io')
-        except Exception:
+        except (OSError, RequestException, SocketIOConnectionError):
             await self.disconnect_sensai()
             raise
 
@@ -157,7 +205,7 @@ class SensaiApp(App):
 
         try:
             await self.connect_sensai()
-        except Exception as exc:
+        except (OSError, RequestException, SocketIOConnectionError) as exc:
             self.exit(return_code=1, message=RichMarkdown(f'**Failed to connect to SensAI:** `{exc}`'))
             return
 
@@ -169,53 +217,21 @@ class SensaiApp(App):
 
     def add_file_context(self, filenames: list[str]):
         for filename in filenames:
-            if self.remote_client.is_file(filename):
-                try:
-                    file_content = self.remote_client.read_bytes(filename)
-                    self.file_context += f'BEGIN {filename}\n{file_content.decode()}\nEND {filename}\n'
-                except UnicodeDecodeError:
-                    self.file_context += f'BEGIN {filename}\n{file_content}\nEND {filename}\n'
-                except PermissionError:
-                    self.file_context += f'Permission denied: {filename}'
-            elif Path(filename).expanduser().is_file():
-                if os.access(filename, os.R_OK):
-                    file_content = Path(filename).read_bytes()
-                    try:
-                        self.file_context += f'BEGIN {filename}\n{file_content.decode()}\nEND {filename}\n'
-                    except UnicodeDecodeError:
-                        self.file_context += f'BEGIN {filename}\n{file_content}\nEND {filename}\n'
-                else:
-                    self.file_context += f'Permission denied: {filename}'
-            else:
-                self.file_context += f'File not found: {filename}'
+            self.file_context = append_context(self.file_context, format_file_context(self.remote_client, filename))
 
     async def run_shell_cmd(self):
         vertical_scroll = self.query_one(VerticalScroll)
-        command_fds = self.remote_client.ssh.exec_command(self.user_message[1:].strip())
+        command = self.user_message[1:].strip()
         self.user_message = ''
-        command_stdout, command_stderr = command_fds[1].read(), command_fds[2].read()
-
-        if command_stdout:
-            command_stdout_str = command_stdout.decode(errors='replace')
-            if '````' in command_stdout_str:
-                command_stdout_md = f'**Command stdout:**\n{command_stdout_str}\n'
-            elif '```' in command_stdout_str:
-                command_stdout_md = f'**Command stdout:**\n````\n{command_stdout_str}\n````\n'
-            else:
-                command_stdout_md = f'**Command stdout:**\n```\n{command_stdout_str}\n```\n'
-            self.terminal_context += command_stdout_md
-            await vertical_scroll.mount(Markdown(command_stdout_md))
-
-        if command_stderr:
-            command_stderr_str = command_stderr.decode(errors='replace')
-            if '````' in command_stderr_str:
-                command_stderr_md = f'**Command stderr:**\n{command_stderr_str}\n'
-            elif '```' in command_stderr_str:
-                command_stderr_md = f'**Command stderr:**\n````\n{command_stderr_str}\n````\n'
-            else:
-                command_stderr_md = f'**Command stderr:**\n```\n{command_stderr_str}\n```\n'
-            self.terminal_context += command_stderr_md
-            await vertical_scroll.mount(Markdown(command_stderr_md))
+        result = run_cmd(
+            command,
+            capture_output=True,
+            pty=False,
+            max_output_bytes=MAX_COMMAND_CONTEXT_BYTES + 1,
+        )
+        command_context = format_command_context(command, result)
+        self.terminal_context = append_context(self.terminal_context, command_context)
+        await vertical_scroll.mount(Markdown(f'```\n{command_context}\n```'))
 
         vertical_scroll.scroll_end()
         self.query_one(Button).disabled = False
@@ -249,7 +265,7 @@ class SensaiApp(App):
         except TimeoutError:
             timeout_message = 'No response received.' if self.timeout is None else f'No response after {self.timeout:g} seconds.'
             await vertical_scroll.mount(Markdown(f'**SensAI timeout:** {timeout_message}'))
-        except Exception as exc:
+        except (KeyError, OSError, RequestException, RuntimeError, SocketIOConnectionError, TypeError, ValueError) as exc:
             await vertical_scroll.mount(Markdown(f'**SensAI connection error:** `{exc}`'))
         finally:
             vertical_scroll.scroll_end()
@@ -363,7 +379,7 @@ class SensaiApp(App):
                 path_dirs = self.remote_client.ssh.exec_command('echo $PATH')[1].read().decode().split(':')
                 fd_args = ['fd', '-Lapu', '-tx', '.'] + path_dirs
                 command_stdout = self.remote_client.ssh.exec_command(shlex.join(fd_args))[1].read()
-                self.shell_commands = sorted(set(Path(p).name for p in command_stdout.decode().splitlines()))
+                self.shell_commands = sorted({Path(p).name for p in command_stdout.decode().splitlines()})
 
             for cmd in self.shell_commands:
                 if cmd.startswith(input_box.value[1:]):
@@ -489,7 +505,7 @@ class SensaiApp(App):
                     stderr = command_stderr.read().decode(errors='replace').casefold()
                 finally:
                     command_stdout.channel.close()
-        except (OSError, TimeoutError, socket.timeout):
+        except (OSError, TimeoutError):
             return None
         if use_path_scheme and not options and ('unknown option' in stderr or 'invalid option' in stderr):
             return self.fetch_file_options(query, use_path_scheme=False)
@@ -631,38 +647,24 @@ def run_simple(base_url: str, session_cookie: str, timeout: float | None):
 
                 elif user_message.startswith('!'):
                     command_in = user_message[1:]
-                    command_out = run_cmd(command_in, capture_output=True, pty=False)
-                    if command_out is not None:
-                        command_out_str = command_out.decode(errors='replace')
-                        command_out_md = command_out_str if '```' in command_out_str else f'```\n{command_out_str}\n```'
-                        rprint(RichMarkdown(f'**Command output:**\n{command_out_md}'))
-                        terminal_context += f'Command input:\n{command_in}\nCommand output:\n{command_out_md}\n'
+                    result = run_cmd(
+                        command_in,
+                        capture_output=True,
+                        pty=False,
+                        max_output_bytes=MAX_COMMAND_CONTEXT_BYTES + 1,
+                    )
+                    command_context = format_command_context(command_in, result)
+                    rprint(RichMarkdown(f'**Command output:**\n```\n{command_context}\n```'))
+                    terminal_context = append_context(terminal_context, command_context)
+                    if result.returncode == 0:
                         success('Added command input and output to terminal context.')
                     else:
-                        fail('Command failed.')
+                        fail(f'Command exited with status {result.returncode}.')
 
                 elif user_message.strip():
                     filenames = re.findall(r'@(\S+)', user_message)
                     for filename in filenames:
-                        if remote_client.is_file(filename):
-                            try:
-                                file_content = remote_client.read_bytes(filename)
-                                file_context += f'BEGIN {filename}\n{file_content.decode()}\nEND {filename}\n'
-                            except UnicodeDecodeError:
-                                file_context += f'BEGIN {filename}\n{file_content}\nEND {filename}\n'
-                            except PermissionError:
-                                file_context += f'Permission denied: {filename}'
-                        elif Path(filename).expanduser().is_file():
-                            if os.access(filename, os.R_OK):
-                                file_content = Path(filename).read_bytes()
-                                try:
-                                    file_context += f'BEGIN {filename}\n{file_content.decode()}\nEND {filename}\n'
-                                except UnicodeDecodeError:
-                                    file_context += f'BEGIN {filename}\n{file_content}\nEND {filename}\n'
-                            else:
-                                file_context += f'Permission denied: {filename}'
-                        else:
-                            file_context += f'File not found: {filename}'
+                        file_context = append_context(file_context, format_file_context(remote_client, filename))
 
                     content = {'message': user_message, 'terminal': terminal_context, 'file': file_context}
                     sio.emit('new_interaction', {'type': 'learner', 'content': content})
@@ -676,6 +678,7 @@ def run_simple(base_url: str, session_cookie: str, timeout: float | None):
                             fail('SensAI did not respond.')
                         else:
                             fail(f'SensAI timed out after {timeout:g} seconds.')
+                        continue
                     if event[0] == 'new_interaction':
                         success('SensAI response:')
                         rprint(RichMarkdown(event[1]['content']['message']))

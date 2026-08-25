@@ -1,21 +1,44 @@
 """Handles video playback for Twitch and YouTube."""
 
-from pathlib import Path
-from shutil import which
 import subprocess
+from pathlib import Path
+
 import yt_dlp
 
-from .config import load_user_config
-from .constants import UNAME_SYSTEM
+from .constants import UNAME_SYSTEM, XDG_BIN_HOME
 from .http import request
-from .install import homebrew_install, nanobrew_install, wax_install, zerobrew_install
+from .install import (
+    configured_package_manager,
+    package_manager_install,
+    require_executable,
+)
 from .log import error
-from .utils import can_render_image, download_image, show_table
+from .utils import can_render_image, download_image, paginate, require_item, show_table
+
+
+def require_iina() -> Path:
+    """Resolve IINA, installing it after confirmation if needed."""
+    package_manager = configured_package_manager()
+    return require_executable(
+        'iina',
+        [XDG_BIN_HOME / 'iina', '/Applications/IINA.app/Contents/MacOS/iina-cli'],
+        display_name='IINA',
+        installer=lambda: package_manager_install(casks=['iina'], packages=['iina']),
+        method=package_manager,
+    )
+
+def require_mpv() -> Path:
+    """Resolve mpv, installing it after confirmation if needed."""
+    package_manager = configured_package_manager()
+    return require_executable(
+        'mpv',
+        [XDG_BIN_HOME / 'mpv', '/usr/local/bin/mpv', '/usr/bin/mpv'],
+        installer=lambda: package_manager_install(formulae=['mpv'], packages=['mpv']),
+        method=package_manager,
+    )
+
 
 def play_twitch(channel: str):
-    user_config = load_user_config()
-    package_manager = user_config['package_manager'][UNAME_SYSTEM]
-
     twitch_url = f'https://www.twitch.tv/{channel}'
 
     if 'isLiveBroadcast' not in request(twitch_url, False, False).text:
@@ -23,29 +46,13 @@ def play_twitch(channel: str):
         return
 
     if UNAME_SYSTEM == 'Darwin':
-        if not Path(which('iina') or '/Applications/IINA.app/Contents/MacOS/iina-cli').is_file():
-            if package_manager == 'homebrew':
-                homebrew_install(casks=['iina'])
-            elif package_manager == 'nanobrew':
-                nanobrew_install(casks=['iina'])
-            elif package_manager == 'wax':
-                wax_install(casks=['iina'])
-            elif package_manager == 'zerobrew':
-                zerobrew_install(casks=['iina'])
-
-        iina_cli = Path(which('iina') or '/Applications/IINA.app/Contents/MacOS/iina-cli')
-        subprocess.run([iina_cli, twitch_url])
+        iina_cli = require_iina()
+        completed = subprocess.run([str(iina_cli), twitch_url], check=False)
+        if completed.returncode:
+            raise SystemExit(completed.returncode)
 
     elif UNAME_SYSTEM == 'Linux':
-        if not Path(which('mpv') or '/usr/bin/mpv').is_file():
-            if package_manager == 'homebrew':
-                homebrew_install(['mpv'])
-            elif package_manager == 'nanobrew':
-                nanobrew_install(['mpv'])
-            elif package_manager == 'wax':
-                wax_install(['mpv'])
-            elif package_manager == 'zerobrew':
-                zerobrew_install(['mpv'])
+        require_mpv()
 
         from mpv import MPV
         player = MPV()
@@ -56,40 +63,21 @@ def play_twitch(channel: str):
         error(f'Unsupported platform: {UNAME_SYSTEM}')
 
 def play_youtube(video_id: str, playlist_id: str | None = None):
-    user_config = load_user_config()
-    package_manager = user_config['package_manager'][UNAME_SYSTEM]
-
     youtube_url = video_id if video_id.startswith('https://') else f'https://www.youtube.com/watch?v={video_id}'
     if playlist_id:
         youtube_url += f'&list={playlist_id}' if '?' in youtube_url else f'?list={playlist_id}'
 
     if UNAME_SYSTEM == 'Darwin':
-        if not Path(which('iina') or '/Applications/IINA.app/Contents/MacOS/iina-cli').is_file():
-            if package_manager == 'homebrew':
-                homebrew_install(casks=['iina'])
-            elif package_manager == 'nanobrew':
-                nanobrew_install(casks=['iina'])
-            elif package_manager == 'wax':
-                wax_install(casks=['iina'])
-            elif package_manager == 'zerobrew':
-                zerobrew_install(casks=['iina'])
-
-        iina_cli = Path(which('iina') or '/Applications/IINA.app/Contents/MacOS/iina-cli')
+        iina_cli = require_iina()
         iina_args = [iina_cli, youtube_url, '--mpv-ytdl=yes']
         if playlist_id:
             iina_args.append('--mpv-ytdl-raw-options="yes-playlist="')
-        subprocess.run(iina_args)
+        completed = subprocess.run([str(arg) for arg in iina_args], check=False)
+        if completed.returncode:
+            raise SystemExit(completed.returncode)
 
     elif UNAME_SYSTEM == 'Linux':
-        if not Path(which('mpv') or '/usr/bin/mpv').is_file():
-            if package_manager == 'homebrew':
-                homebrew_install(['mpv'])
-            elif package_manager == 'nanobrew':
-                nanobrew_install(['mpv'])
-            elif package_manager == 'wax':
-                wax_install(['mpv'])
-            elif package_manager == 'zerobrew':
-                zerobrew_install(['mpv'])
+        require_mpv()
 
         from mpv import MPV
         player = MPV(ytdl=True, ytdl_raw_options='yes-playlist=')
@@ -116,10 +104,13 @@ def init_youtube(
 
     elif dojo_id is not None and module_id is not None and resource_id is not None:
         modules = request(f'/dojos/{dojo_id}/modules', auth=False).json().get('modules')
-        module = next(filter(lambda module: module['id'] == module_id, modules))
-        resource = next(filter(lambda resource: resource['id'] == resource_id, module['resources']))
+        module = require_item(modules, module_id, 'Module')
+        resource = require_item(module['resources'], resource_id, 'Resource')
         if resource['type'] == 'lecture':
-            play_youtube(resource.get('video'), resource.get('playlist'))
+            video = resource.get('video')
+            if not video:
+                error(f'The lecture with the ID {resource_id} does not have a video.')
+            play_youtube(video, resource.get('playlist'))
         else:
             error(f'The resource with the ID {resource_id} is not a lecture, it is of type "{resource['type']}".')
 
@@ -130,8 +121,7 @@ def init_youtube(
             else:
                 feed = ydl.extract_info('https://www.youtube.com/pwncollege')['entries'][0]['entries']
 
-        if page is not None:
-            feed = feed[page * 20:][:20]
+        feed = paginate(feed, page)
 
         render_image = not simple and can_render_image()
         for row in feed:

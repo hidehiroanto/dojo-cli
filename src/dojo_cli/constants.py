@@ -1,8 +1,8 @@
 """Constants for the pwn.college dojo CLI."""
 
-from pathlib import Path
-import platform
 import os
+import platform
+from pathlib import Path
 
 CARGO_HOME = Path('~/.cargo')
 SSH_HOME = Path('~/.ssh')

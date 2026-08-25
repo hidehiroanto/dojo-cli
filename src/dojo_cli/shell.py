@@ -4,6 +4,7 @@ import shlex
 
 from .remote import run_cmd
 
+
 def init_bash(command_string: str | None = None):
     bash_args = ['bash', '-l']
     if command_string is not None:

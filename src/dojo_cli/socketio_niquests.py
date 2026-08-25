@@ -1,8 +1,8 @@
 """Niquests-backed Socket.IO transport helpers."""
 
 import asyncio
-from http.cookies import SimpleCookie
 import inspect
+from http.cookies import SimpleCookie
 from types import SimpleNamespace
 from typing import cast
 
@@ -15,6 +15,7 @@ from niquests import AsyncSession
 from niquests.cookies import create_cookie
 from niquests.exceptions import RequestException
 from socketio import AsyncClient, AsyncSimpleClient
+
 
 async def maybe_await(result):
     if inspect.isawaitable(result):
@@ -113,7 +114,14 @@ class SocketIoSession:
         return ResponseAdapter(response)
 
     async def ws_connect(self, url: str, *, headers: dict | None = None, timeout=None, verify: bool = True) -> WebSocketAdapter:
-        return WebSocketAdapter(await self.session.get(url, headers=headers, stream=True, timeout=None, verify=verify))
+        response = await self.session.get(
+            url,
+            headers=headers,
+            stream=True,
+            timeout=self.normalize_timeout(timeout),
+            verify=verify,
+        )
+        return WebSocketAdapter(response)
 
 class SocketIoEngineClient(engineio.AsyncClient):
     async def _connect_websocket(self, url, headers, engineio_path):
@@ -154,7 +162,7 @@ class SocketIoEngineClient(engineio.AsyncClient):
             try:
                 await ws.send_str(packet_data)
                 packet_data = (await ws.receive()).data
-            except Exception as exc:
+            except (OSError, RequestException, RuntimeError, TypeError, ValueError) as exc:
                 self.logger.warning('WebSocket upgrade failed: unexpected exception: %s', str(exc))
                 return False
 
@@ -166,7 +174,7 @@ class SocketIoEngineClient(engineio.AsyncClient):
             packet_data = engineio.packet.Packet(engineio.packet.UPGRADE).encode()
             try:
                 await ws.send_str(packet_data)
-            except Exception as exc:
+            except (OSError, RequestException, RuntimeError, TypeError, ValueError) as exc:
                 self.logger.warning('WebSocket upgrade failed: unexpected send exception: %s', str(exc))
                 return False
 
@@ -175,7 +183,7 @@ class SocketIoEngineClient(engineio.AsyncClient):
         else:
             try:
                 packet_data = (await ws.receive()).data
-            except Exception as exc:
+            except (OSError, RequestException, RuntimeError, TypeError, ValueError) as exc:
                 raise engineio.exceptions.ConnectionError('Unexpected recv exception: ' + str(exc))
 
             open_packet = engineio.packet.Packet(encoded_packet=packet_data)
@@ -228,12 +236,12 @@ async def close_socketio_client(sio: SocketIoSimpleClient | None, http_session: 
         if tasks:
             try:
                 await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=1)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
         if engine_client.ws is not None:
             try:
                 await asyncio.wait_for(maybe_await(engine_client.ws.close()), timeout=1)
-            except (asyncio.TimeoutError, OSError):
+            except (TimeoutError, OSError):
                 pass
         sio.client = None
         sio.connected = False
@@ -242,5 +250,5 @@ async def close_socketio_client(sio: SocketIoSimpleClient | None, http_session: 
     if http_session is not None and not http_session.closed:
         try:
             await asyncio.wait_for(http_session.close(), timeout=1)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass

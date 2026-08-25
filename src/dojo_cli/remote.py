@@ -1,28 +1,56 @@
 """Handles remote SSH connections."""
 
 import os
-from pathlib import Path
 import select
 import shlex
-from shutil import which
 import signal
 import subprocess
 import sys
 import termios
 import tty
+from dataclasses import dataclass
+from pathlib import Path
+from shutil import which
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+    PublicFormat,
+)
 
 from .client import get_remote_client
 from .config import load_user_config
+from .constants import XDG_BIN_HOME
 from .http import request
+from .install import (
+    configured_package_manager,
+    package_manager_install,
+    require_executable,
+)
 from .log import error, info, success, warn
 from .terminal import apply_style
 
 BUFFER_SIZE = 1024
 DEFAULT_PTY_SIZE = (80, 24)
 DEFAULT_TERM = 'xterm-256color'
+
+@dataclass(frozen=True)
+class CommandResult:
+    returncode: int
+    stdout: bytes = b''
+    stderr: bytes = b''
+
+def append_output(output: bytes, chunk: bytes, limit: int | None) -> bytes:
+    """Append command output without retaining more than the requested limit."""
+    if limit is None:
+        return output + chunk
+    return output + chunk[:max(0, limit - len(output))]
+
+def install_openssh():
+    """Install OpenSSH using the configured package manager."""
+    package_manager_install(formulae=['openssh'], packages=['openssh'])
 
 def ssh_keygen():
     if 'DOJO_AUTH_TOKEN' in os.environ:
@@ -34,6 +62,11 @@ def ssh_keygen():
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
     ssh_public_identity_file = ssh_identity_file.parent.joinpath(f'{ssh_identity_file.name}.pub')
 
+    ssh_identity_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    ssh_identity_file.parent.chmod(0o700)
+    ssh_config_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    ssh_config_file.parent.chmod(0o700)
+
     if ssh_identity_file.is_file():
         warn(f'Identity file already exists at {ssh_identity_file}, override?')
         if input('(y/N) > ').strip()[:1].lower() != 'y':
@@ -41,16 +74,17 @@ def ssh_keygen():
             return
 
     private_key = Ed25519PrivateKey.generate()
-    ssh_identity_file.touch(0o600)
     ssh_identity_file.write_bytes(private_key.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption()))
+    ssh_identity_file.chmod(0o600)
     success(f'Saved SSH private key to {apply_style(ssh_identity_file)}.')
 
     public_key = private_key.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode()
-    ssh_public_identity_file.touch(0o644)
     ssh_public_identity_file.write_text(public_key)
+    ssh_public_identity_file.chmod(0o644)
     success(f'Saved SSH public key to {apply_style(ssh_public_identity_file)}.')
 
-    ssh_config_file.touch(0o644)
+    ssh_config_file.touch()
+    ssh_config_file.chmod(0o600)
     ssh_config_data = ssh_config_file.read_text()
     if f'Host {ssh_config['Host']}' not in ssh_config_data:
         if ssh_config_data:
@@ -88,7 +122,9 @@ def bat_file(path: Path):
         elif not os.access(path, os.R_OK):
             error(f'Permission to read {apply_style(path)} denied.')
 
-        subprocess.run([which('bat') or '/run/dojo/bin/bat', path])
+        completed = subprocess.run([which('bat') or '/run/dojo/bin/bat', str(path)], check=False)
+        if completed.returncode:
+            raise SystemExit(completed.returncode)
 
     else:
         if not request('/docker').json().get('success'):
@@ -138,7 +174,9 @@ def edit_path(editor: str, path: Path | None = None):
         elif editor in ['nano'] and path.is_dir():
             error(f'{editor} does not support opening directories.')
 
-        subprocess.run([editor, path] if path else [editor])
+        completed = subprocess.run([editor, str(path)] if path else [editor], check=False)
+        if completed.returncode:
+            raise SystemExit(completed.returncode)
 
     else:
         if not request('/docker').json().get('success'):
@@ -154,11 +192,16 @@ def run_openssh(
     command: str | None = None,
     capture_output: bool = False,
     payload: bytes | None = None,
-    pty: bool = True
-) -> bytes | None:
-    ssh = Path(which('ssh') or '/usr/bin/ssh')
-    if not ssh.is_file():
-        error('Please install OpenSSH first.')
+    pty: bool = True,
+    max_output_bytes: int | None = None,
+) -> CommandResult:
+    ssh = require_executable(
+        'ssh',
+        [XDG_BIN_HOME / 'ssh', '/usr/local/bin/ssh', '/usr/bin/ssh'],
+        display_name='OpenSSH',
+        installer=install_openssh,
+        method=configured_package_manager(),
+    )
 
     ssh_config = load_user_config()['ssh']
     ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
@@ -166,13 +209,15 @@ def run_openssh(
     pty_option = '-t' if pty else '-T'
 
     if ssh_config_file.is_file() and f'Host {ssh_config['Host']}' in ssh_config_file.read_text():
-        ssh_args = [ssh, pty_option, '-F', ssh_config_file, ssh_config['Host']]
+        ssh_args = [str(ssh), pty_option, '-F', str(ssh_config_file), ssh_config['Host']]
     elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
         ssh_args = [
-            ssh, pty_option, '-i', ssh_identity_file,
+            str(ssh), pty_option,
+            '-p', str(ssh_config['Port']),
+            '-i', str(ssh_identity_file),
             '-o', f'ServerAliveCountMax={ssh_config['ServerAliveCountMax']}',
             '-o', f'ServerAliveInterval={ssh_config['ServerAliveInterval']}',
-            f'{ssh_config['User']}@{ssh_config['HostName']}:{ssh_config['Port']}'
+            f'{ssh_config['User']}@{ssh_config['HostName']}'
         ]
     else:
         error('Something went wrong with the SSH config file or the SSH key, please make sure at least one is valid.')
@@ -180,16 +225,21 @@ def run_openssh(
     if command:
         ssh_args.append(command)
 
-    completed_process = subprocess.run(ssh_args, capture_output=capture_output, input=payload)
-    if capture_output:
-        return completed_process.stdout
+    completed_process = subprocess.run(ssh_args, capture_output=capture_output, input=payload, check=False)
+    stdout = completed_process.stdout or b''
+    stderr = completed_process.stderr or b''
+    if max_output_bytes is not None:
+        stdout = stdout[:max_output_bytes]
+        stderr = stderr[:max_output_bytes]
+    return CommandResult(completed_process.returncode, stdout, stderr)
 
 def run_paramiko(
     command: str | None = None,
     capture_output: bool = False,
     payload: bytes | None = None,
-    pty: bool = True
-) -> bytes | None:
+    pty: bool = True,
+    max_output_bytes: int | None = None,
+) -> CommandResult:
     with get_remote_client().get_channel() as channel:
         try:
             stdin_fd = sys.stdin.fileno()
@@ -216,6 +266,7 @@ def run_paramiko(
             signal.signal(signal.SIGWINCH, resize_pty)
 
         output = b''
+        error_output = b''
 
         if command:
             channel.exec_command(command)
@@ -253,14 +304,22 @@ def run_paramiko(
                 rlist = select.select(rlist_sources, [], [])[0]
                 if channel in rlist:
                     try:
-                        buffer = channel.recv(BUFFER_SIZE)
-                        if not buffer:
+                        if channel.recv_ready():
+                            buffer = channel.recv(BUFFER_SIZE)
+                            if capture_output:
+                                output = append_output(output, buffer, max_output_bytes)
+                            else:
+                                sys.stdout.buffer.write(buffer)
+                                sys.stdout.buffer.flush()
+                        if channel.recv_stderr_ready():
+                            buffer = channel.recv_stderr(BUFFER_SIZE)
+                            if capture_output:
+                                error_output = append_output(error_output, buffer, max_output_bytes)
+                            else:
+                                sys.stderr.buffer.write(buffer)
+                                sys.stderr.buffer.flush()
+                        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
                             break
-                        if capture_output:
-                            output += buffer
-                        else:
-                            sys.stdout.buffer.write(buffer)
-                            sys.stdout.buffer.flush()
                     except TimeoutError:
                         pass
                 if sys.stdin in rlist:
@@ -280,28 +339,38 @@ def run_paramiko(
             if oldtty is not None and stdin_fd is not None:
                 termios.tcsetattr(stdin_fd, termios.TCSADRAIN, oldtty)
 
-        if capture_output:
-            return output
+        return CommandResult(channel.recv_exit_status(), output, error_output)
 
 def run_cmd(
     command: str | None = None,
     capture_output: bool = False,
     payload: bytes | None = None,
     pty: bool = True,
-    client_type: str = 'paramiko'
-) -> bytes | None:
-    """Run a command on the remote server. If capture_output is True, the standard out bytes are returned."""
+    client_type: str = 'paramiko',
+    max_output_bytes: int | None = None,
+) -> CommandResult:
+    """Run a command and return its status, standard output, and standard error."""
 
     if client_type == 'local' or 'DOJO_AUTH_TOKEN' in os.environ:
-        completed_process = subprocess.run(command or 'bash', shell=True, capture_output=capture_output, input=payload)
-        if capture_output:
-            return completed_process.stdout
+        completed_process = subprocess.run(
+            command or 'bash',
+            shell=True,
+            capture_output=capture_output,
+            input=payload,
+            check=False,
+        )
+        stdout = completed_process.stdout or b''
+        stderr = completed_process.stderr or b''
+        if max_output_bytes is not None:
+            stdout = stdout[:max_output_bytes]
+            stderr = stderr[:max_output_bytes]
+        return CommandResult(completed_process.returncode, stdout, stderr)
     elif not request('/docker').json().get('success'):
         error('No active challenge session; start a challenge!')
     elif client_type == 'openssh':
-        return run_openssh(command, capture_output, payload, pty)
+        return run_openssh(command, capture_output, payload, pty, max_output_bytes)
     elif client_type == 'paramiko':
-        return run_paramiko(command, capture_output, payload, pty)
+        return run_paramiko(command, capture_output, payload, pty, max_output_bytes)
     else:
         error(f'Invalid client type: {client_type}')
 

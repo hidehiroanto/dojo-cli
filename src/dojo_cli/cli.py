@@ -821,6 +821,20 @@ def zed(*,
     from .zed import init_zed
     init_editor('Zed') if use_mount else init_zed(install, use_lang_servers)
 
+workspace_services = Group.create_ordered('Workspace')
+
+@app.command(group=workspace_services)
+def desktop():
+    """Open the active pwn.college Desktop workspace in terminal-browser."""
+    from .workspace import open_desktop
+    open_desktop()
+
+@app.command(group=workspace_services)
+def tode():
+    """Open the active pwn.college Code workspace in terminal-browser."""
+    from .workspace import open_tode
+    open_tode()
+
 challenge_help = Group.create_ordered('Challenge Help')
 
 @app.command(group=challenge_help)

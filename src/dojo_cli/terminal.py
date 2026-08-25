@@ -1,10 +1,11 @@
 """Handles terminal output formatting."""
 
 import datetime
-from pathlib import Path
 import re
+from pathlib import Path
 
 from .config import load_user_config
+
 
 def apply_style(obj):
     object_styles = load_user_config()['object_styles']
@@ -12,7 +13,7 @@ def apply_style(obj):
     if isinstance(obj, str):
         if re.match(r'^[\w\-\.]+@([\w\-]+\.)+[\w\-]{2,4}$', obj):
             style = f'{object_styles['email']} link=mailto:{obj}'
-        elif obj.startswith('http://') or obj.startswith('https://'):
+        elif obj.startswith(('http://', 'https://')):
             style = f'{object_styles['url']} link={obj}'
         else:
             return obj

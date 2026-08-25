@@ -1,8 +1,8 @@
 """Handles user login and data."""
 
+import re
 from datetime import datetime, timedelta
 from getpass import getpass
-import re
 
 from bs4 import BeautifulSoup
 from niquests import Session
@@ -12,7 +12,8 @@ from rich.table import Table
 from .config import load_user_config
 from .http import delete_cookie, request, save_cookie
 from .log import error, fail, info, success
-from .utils import can_render_image, download_image, get_belt_hex, show_table
+from .utils import can_render_image, download_image, get_belt_hex, paginate, show_table
+
 
 def get_session_cookie(session: Session) -> str:
     for cookie in session.cookies:
@@ -103,17 +104,23 @@ def show_me(simple: bool = False):
     score = request('/score', auth=False, params={'username': account['name']})
     fields = list(map(int, score.json().split(':')))
 
-    belt_data = request('/belts', auth=False).json()['users'].get(str(account['id']), {})
-    belt_hex = get_belt_hex(belt_data.get('color', 'white'))
+    belt_data = request('/belts', auth=False).json()['users'].get(str(account['id']))
+    if belt_data:
+        color = belt_data['color']
+        belt_hex = get_belt_hex(color)
+        if not simple and can_render_image():
+            account['belt'] = download_image(f'/belt/{color}.svg')
+        else:
+            account['belt'] = f'[b {belt_hex}]{color.title()}[/]'
+        account['date_ascended'] = datetime.fromisoformat(belt_data['date'])
+    else:
+        belt_hex = get_belt_hex('white')
+        account['belt'] = '[dim]Unbelted[/]'
+        account['date_ascended'] = None
 
     account['rank'] = f'[b green]{get_rank(fields[0])}/{fields[5]}[/]'
     account['handle'] = f'[b {belt_hex}]{account['name']}[/]'
-    if not simple and can_render_image():
-        account['belt'] = download_image(f'/belt/{belt_data['color']}.svg')
-    else:
-        account['belt'] = f'[b {belt_hex}]{belt_data['color'].title()}[/]'
     account['country'] = ''.join(chr(ord(c) + ord('🇦') - ord('A')) for c in account['country'])
-    account['date_ascended'] = datetime.fromisoformat(belt_data['date'])
     account['score'] = f'[b cyan]{fields[1]}/{fields[2]}[/]'
 
     info(f'You are the epic hacker [b green]{account['name']}[/]!')
@@ -284,6 +291,6 @@ def show_belts(belt: str | None = None, page: int | None = None, simple: bool = 
             belts.append(user)
 
     if page is not None:
-        belts = belts[page * 20:][:20]
+        belts = paginate(belts, page)
 
     show_table(belts, title, ['rank', 'id', 'handle', 'belt', 'website', 'date_ascended'])
