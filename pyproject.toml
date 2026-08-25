@@ -29,3 +29,12 @@ dojo = "dojo_cli:app"
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13"]
 build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+extend-select = ["E501"]
+
+[tool.ruff.format]
+quote-style = "single"

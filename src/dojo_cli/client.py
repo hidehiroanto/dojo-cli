@@ -28,15 +28,18 @@ class RemoteClient(fuse.Operations):
         hostname = kwargs.get('hostname', ssh_config['HostName'])
         port = kwargs.get('port', ssh_config['Port'])
         username = kwargs.get('username', ssh_config['User'])
-        key_filename = Path(kwargs.get('key_filename', ssh_config['IdentityFile'])).expanduser().resolve()
+        key_filename = (
+            Path(kwargs.get('key_filename', ssh_config['IdentityFile']))
+            .expanduser()
+            .resolve()
+        )
         self.project_path = Path(kwargs.get('project_path', ssh_config['project_path']))
 
         self.ssh = SSHClient()
         self.ssh.load_system_host_keys()
         self.ssh.set_missing_host_key_policy(RejectPolicy())
         self.ssh.connect(hostname, port, username, key_filename=str(key_filename))
-        self.sftp: SFTPClient = self.ssh.open_sftp()
-        self.sftp.chdir(str(self.project_path))
+        self._sftp: SFTPClient | None = None
         self.handles: dict[int, SFTPFile] = {}
         self.handle_ids = count(1)
         self.handle_lock = RLock()
@@ -48,6 +51,13 @@ class RemoteClient(fuse.Operations):
     def __exit__(self, exc_type, exc_val, traceback):
         self.close()
 
+    @property
+    def sftp(self) -> SFTPClient:
+        if self._sftp is None:
+            self._sftp = self.ssh.open_sftp()
+            self._sftp.chdir(str(self.project_path))
+        return self._sftp
+
     def close(self):
         global remote_client
         with self.handle_lock:
@@ -55,7 +65,8 @@ class RemoteClient(fuse.Operations):
             self.handles.clear()
         for handle in handles:
             handle.close()
-        self.sftp.close()
+        if self._sftp is not None:
+            self._sftp.close()
         self.ssh.close()
         if remote_client is self:
             remote_client = None
@@ -108,7 +119,10 @@ class RemoteClient(fuse.Operations):
         try:
             stat_result = self.sftp.lstat(path)
             if stat.S_ISDIR(stat_result.st_mode):
-                return sum(self.getsize(str(Path(path) / child)) for child in self.sftp.listdir(path))
+                return sum(
+                    self.getsize(str(Path(path) / child))
+                    for child in self.sftp.listdir(path)
+                )
             elif stat.S_ISREG(stat_result.st_mode) or stat.S_ISLNK(stat_result.st_mode):
                 return stat_result.st_size
             else:
@@ -266,7 +280,9 @@ class RemoteClient(fuse.Operations):
             f.write(data)
             return len(data)
 
+
 remote_client = None
+
 
 def get_remote_client() -> RemoteClient:
     global remote_client

@@ -27,6 +27,7 @@ def require_iina() -> Path:
         method=package_manager,
     )
 
+
 def require_mpv() -> Path:
     """Resolve mpv, installing it after confirmation if needed."""
     package_manager = configured_package_manager()
@@ -55,6 +56,7 @@ def play_twitch(channel: str):
         require_mpv()
 
         from mpv import MPV
+
         player = MPV()
         player.play(twitch_url)
         player.wait_for_shutdown()
@@ -62,10 +64,17 @@ def play_twitch(channel: str):
     else:
         error(f'Unsupported platform: {UNAME_SYSTEM}')
 
+
 def play_youtube(video_id: str, playlist_id: str | None = None):
-    youtube_url = video_id if video_id.startswith('https://') else f'https://www.youtube.com/watch?v={video_id}'
+    youtube_url = (
+        video_id
+        if video_id.startswith('https://')
+        else f'https://www.youtube.com/watch?v={video_id}'
+    )
     if playlist_id:
-        youtube_url += f'&list={playlist_id}' if '?' in youtube_url else f'?list={playlist_id}'
+        youtube_url += (
+            f'&list={playlist_id}' if '?' in youtube_url else f'?list={playlist_id}'
+        )
 
     if UNAME_SYSTEM == 'Darwin':
         iina_cli = require_iina()
@@ -80,6 +89,7 @@ def play_youtube(video_id: str, playlist_id: str | None = None):
         require_mpv()
 
         from mpv import MPV
+
         player = MPV(ytdl=True, ytdl_raw_options='yes-playlist=')
         player.play(youtube_url)
         player.wait_for_shutdown()
@@ -87,8 +97,10 @@ def play_youtube(video_id: str, playlist_id: str | None = None):
     else:
         error(f'Unsupported platform: {UNAME_SYSTEM}')
 
+
 def init_twitch():
     play_twitch('pwncollege')
+
 
 def init_youtube(
     video_id: str | None = None,
@@ -97,7 +109,7 @@ def init_youtube(
     module_id: str | None = None,
     resource_id: str | None = None,
     page: int | None = None,
-    simple: bool = False
+    simple: bool = False,
 ):
     if video_id is not None:
         play_youtube(video_id, playlist_id)
@@ -112,25 +124,40 @@ def init_youtube(
                 error(f'The lecture with the ID {resource_id} does not have a video.')
             play_youtube(video, resource.get('playlist'))
         else:
-            error(f'The resource with the ID {resource_id} is not a lecture, it is of type "{resource['type']}".')
+            error(
+                f'The resource with the ID {resource_id} is not a lecture, '
+                f'it is of type "{resource["type"]}".'
+            )
 
     else:
-        with yt_dlp.YoutubeDL({'extract_flat': True, 'quiet': True, 'skip_download': True}) as ydl:
+        with yt_dlp.YoutubeDL(
+            {'extract_flat': True, 'quiet': True, 'skip_download': True}
+        ) as ydl:
             if playlist_id is not None:
-                feed = ydl.extract_info(f'https://www.youtube.com/playlist?list={playlist_id}')['entries']
+                feed = ydl.extract_info(
+                    f'https://www.youtube.com/playlist?list={playlist_id}'
+                )['entries']
             else:
-                feed = ydl.extract_info('https://www.youtube.com/pwncollege')['entries'][0]['entries']
+                feed = ydl.extract_info('https://www.youtube.com/pwncollege')[
+                    'entries'
+                ][0]['entries']
 
         feed = paginate(feed, page)
 
         render_image = not simple and can_render_image()
         for row in feed:
-            row['id'] = f'[b cyan]{row['id']}[/]'
-            row['title'] = f'[b green]{row['title']}[/]'
+            row['id'] = f'[b cyan]{row["id"]}[/]'
+            row['title'] = f'[b green]{row["title"]}[/]'
             duration = int(row['duration'])
-            row['duration'] = f'{duration // 3600:02}:{(duration % 3600) // 60:02}:{duration % 60:02}'
+            row['duration'] = (
+                f'{duration // 3600:02}:{(duration % 3600) // 60:02}:{duration % 60:02}'
+            )
             if render_image:
                 row['thumbnail'] = download_image(row['thumbnails'][0]['url'], 3)
 
-        table_keys = ['id', 'thumbnail', 'title', 'url', 'duration'] if render_image else ['id', 'title', 'url', 'duration']
+        table_keys = (
+            ['id', 'thumbnail', 'title', 'url', 'duration']
+            if render_image
+            else ['id', 'title', 'url', 'duration']
+        )
         show_table(feed, 'YouTube Feed', table_keys)

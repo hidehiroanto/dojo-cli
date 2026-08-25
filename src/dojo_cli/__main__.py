@@ -1,4 +1,4 @@
-"""This is here just so you can run `python -m dojo_cli` instead of `dojo` if you want to do that for some reason."""
+"""Allow running `python -m dojo_cli` instead of `dojo`."""
 
 import sys
 

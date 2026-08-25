@@ -1,6 +1,12 @@
 """Launch pwn.college workspace services."""
 
+import html
+import secrets
 import subprocess
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from string import Template
+from threading import Thread
 from urllib.parse import parse_qsl, urlencode, urlparse
 
 from .constants import UNAME_SYSTEM, XDG_BIN_HOME
@@ -9,6 +15,23 @@ from .install import require_executable, run_install_script
 from .log import error
 
 TERMINAL_BROWSER_INSTALL_URL = 'https://terminal-browser.sh/install'
+WORKSPACE_PAGE = Template("""<!doctype html>
+<html>
+<head>
+<meta charset='utf-8'>
+<meta name='referrer' content='no-referrer'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>pwn.college workspace</title>
+<style>
+html, body, iframe { border: 0; height: 100%; margin: 0; padding: 0; width: 100%; }
+iframe { display: block; }
+</style>
+</head>
+<body>
+<iframe src='$destination' allow='clipboard-read; clipboard-write'></iframe>
+</body>
+</html>
+""")
 
 
 def install_terminal_browser():
@@ -45,9 +68,8 @@ def fetch_workspace_url(service: str) -> str:
 
     parsed = urlparse(iframe_src)
     hostname = parsed.hostname or ''
-    trusted_host = (
-        hostname == 'workspace.pwn.college'
-        or hostname.endswith('-workspace.pwn.college')
+    trusted_host = hostname == 'workspace.pwn.college' or hostname.endswith(
+        '-workspace.pwn.college'
     )
 
     if parsed.scheme != 'https' or not trusted_host:
@@ -55,10 +77,7 @@ def fetch_workspace_url(service: str) -> str:
 
     if service == 'desktop':
         query = parse_qsl(parsed.query, keep_blank_values=True)
-        query = [
-            (key, 'scale' if key == 'resize' else value)
-            for key, value in query
-        ]
+        query = [(key, 'scale' if key == 'resize' else value) for key, value in query]
         if not any(key == 'resize' for key, _ in query):
             query.append(('resize', 'scale'))
         iframe_src = parsed._replace(query=urlencode(query)).geturl()
@@ -66,23 +85,76 @@ def fetch_workspace_url(service: str) -> str:
     return iframe_src
 
 
+def workspace_handler(token: str, destination: str) -> type[BaseHTTPRequestHandler]:
+    """Create a handler that embeds a capability without navigating to it."""
+    page = WORKSPACE_PAGE.substitute(
+        destination=html.escape(destination, quote=True),
+    ).encode()
+
+    class WorkspaceHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path != f'/{token}':
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header(
+                'Content-Security-Policy',
+                "default-src 'none'; frame-src https://*.pwn.college; "
+                "style-src 'unsafe-inline'",
+            )
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Referrer-Policy', 'no-referrer')
+            self.send_header('Content-Length', str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+
+        def log_message(self, format, *args):
+            pass
+
+    return WorkspaceHandler
+
+
+@contextmanager
+def capability_page(destination: str):
+    """Expose a capability inside a short-lived loopback page."""
+    token = secrets.token_urlsafe(32)
+    server = ThreadingHTTPServer(
+        ('127.0.0.1', 0), workspace_handler(token, destination)
+    )
+    server.daemon_threads = True
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f'http://127.0.0.1:{server.server_port}/{token}'
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 def open_workspace(service: str) -> None:
     """Open an active workspace service in terminal-browser."""
     terminal_browser = require_executable(
         'terminal-browser',
         [XDG_BIN_HOME / 'terminal-browser'],
-        installer=install_terminal_browser if UNAME_SYSTEM in ['Darwin', 'Linux'] else None,
+        installer=install_terminal_browser
+        if UNAME_SYSTEM in ['Darwin', 'Linux']
+        else None,
         method='the official installer',
     )
 
-    workspace_url = fetch_workspace_url(service)
-    completed = subprocess.run([
-        terminal_browser,
-        'open',
-        workspace_url,
-        '--no-shortcuts',
-        '--allow-clipboard-read',
-    ], check=False)
+    with capability_page(fetch_workspace_url(service)) as launch_url:
+        completed = subprocess.run(
+            [
+                terminal_browser,
+                'open',
+                launch_url,
+                '--no-shortcuts',
+                '--allow-clipboard-read',
+            ],
+            check=False,
+        )
 
     if completed.returncode:
         raise SystemExit(completed.returncode)

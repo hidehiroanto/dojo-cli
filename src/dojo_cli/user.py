@@ -22,18 +22,32 @@ def get_session_cookie(session: Session) -> str:
     error('Failed to find session cookie.')
     raise RuntimeError('unreachable')
 
-def do_register(username: str | None = None, email: str | None = None, password: str | None = None):
+
+def do_register(
+    username: str | None = None, email: str | None = None, password: str | None = None
+):
     while not username:
         username = input('Enter username: ')
     while not email:
         email = input('Enter email: ')
     while not password:
-        password = getpass('Enter password: ', echo_char=load_user_config()['password_echo_char'])
+        password = getpass(
+            'Enter password: ', echo_char=load_user_config()['password_echo_char']
+        )
 
     with Session() as session:
-        credentials = {'name': username, 'email': email, 'password': password, 'commitment_verified': 'verified'}
-        response = request('/register', False, False, True, session=session, data=credentials)
-        errors = re.findall(r'<div class=".*" role="alert">\s+<span>(.*)</span>', response.text)
+        credentials = {
+            'name': username,
+            'email': email,
+            'password': password,
+            'commitment_verified': 'verified',
+        }
+        response = request(
+            '/register', False, False, True, session=session, data=credentials
+        )
+        errors = re.findall(
+            r'<div class=".*" role="alert">\s+<span>(.*)</span>', response.text
+        )
 
         if errors:
             for error_msg in errors:
@@ -42,16 +56,23 @@ def do_register(username: str | None = None, email: str | None = None, password:
             save_cookie({'session': get_session_cookie(session)})
             success(f'Registered and logged in as user [b green]{username}[/]!')
 
+
 def do_login(username: str | None = None, password: str | None = None):
     while not username:
         username = input('Enter username or email: ')
     while not password:
-        password = getpass('Enter password: ', echo_char=load_user_config()['password_echo_char'])
+        password = getpass(
+            'Enter password: ', echo_char=load_user_config()['password_echo_char']
+        )
 
     with Session() as session:
         credentials = {'name': username, 'password': password}
-        response = request('/login', False, False, True, session=session, data=credentials)
-        errors = re.findall(r'<div class=".*" role="alert">\s+<span>(.*)</span>', response.text)
+        response = request(
+            '/login', False, False, True, session=session, data=credentials
+        )
+        errors = re.findall(
+            r'<div class=".*" role="alert">\s+<span>(.*)</span>', response.text
+        )
 
         if errors:
             for error_msg in errors:
@@ -60,24 +81,35 @@ def do_login(username: str | None = None, password: str | None = None):
             save_cookie({'session': get_session_cookie(session)})
             success(f'Logged in as user [b green]{username}[/]!')
 
+
 def do_logout():
     delete_cookie()
     success('You have logged out.')
 
+
 def change_settings():
     settings = request('/settings', False).text
-    matches = re.findall(r'<input class="form[^"]*" id="(\w+)" name="\w+" (type="\w+")? value="([^"]*)">', settings)
-    old_data = [match for match in matches if match[0] not in {'confirm', 'expiration'}]
+    soup = BeautifulSoup(settings, 'html.parser')
+    old_data = {
+        name: str(element.get('value', ''))
+        for element in soup.select('input.form-control[name]')
+        if isinstance(name := element.get('name'), str)
+        and name not in {'confirm', 'expiration'}
+    }
     new_data = {}
-    for key, value in old_data:
+    for key, value in old_data.items():
         if key != 'password':
             info(f'Old {key}: {value}')
         info(f'Change {key}?')
         if input('(y/N) > ').strip()[:1].lower() == 'y':
             if key == 'password':
                 password_echo_char = load_user_config()['password_echo_char']
-                new_data['confirm'] = getpass('Confirm old password: ', echo_char=password_echo_char)
-                new_data['password'] = getpass('Enter new password: ', echo_char=password_echo_char)
+                new_data['confirm'] = getpass(
+                    'Confirm old password: ', echo_char=password_echo_char
+                )
+                new_data['password'] = getpass(
+                    'Enter new password: ', echo_char=password_echo_char
+                )
             else:
                 info(f'Enter new {key}:')
                 new_data[key] = input()
@@ -91,9 +123,11 @@ def change_settings():
         else:
             error(str(response['errors']))
 
+
 def get_rank(num):
     rank_style = load_user_config()['object_styles']['rank']
     return '🥇🥈🥉'[num - 1] if num < 4 else f'[{rank_style}]{num}[/]'
+
 
 def show_me(simple: bool = False):
     me = request('/users/me')
@@ -119,13 +153,28 @@ def show_me(simple: bool = False):
         account['date_ascended'] = None
 
     account['rank'] = f'[b green]{get_rank(fields[0])}/{fields[5]}[/]'
-    account['handle'] = f'[b {belt_hex}]{account['name']}[/]'
-    account['country'] = ''.join(chr(ord(c) + ord('🇦') - ord('A')) for c in account['country'])
+    account['handle'] = f'[b {belt_hex}]{account["name"]}[/]'
+    account['country'] = ''.join(
+        chr(ord(c) + ord('🇦') - ord('A')) for c in account['country']
+    )
     account['score'] = f'[b cyan]{fields[1]}/{fields[2]}[/]'
 
-    info(f'You are the epic hacker [b green]{account['name']}[/]!')
-    keys = ['rank', 'id', 'handle', 'belt', 'email', 'website', 'affiliation', 'country', 'bracket', 'date_ascended', 'score']
+    info(f'You are the epic hacker [b green]{account["name"]}[/]!')
+    keys = [
+        'rank',
+        'id',
+        'handle',
+        'belt',
+        'email',
+        'website',
+        'affiliation',
+        'country',
+        'bracket',
+        'date_ascended',
+        'score',
+    ]
     show_table(account, 'Account Info', keys)
+
 
 def show_score(username: str | None = None):
     if not username:
@@ -138,11 +187,15 @@ def show_score(username: str | None = None):
     score = request('/score', auth=False, params={'username': username}).json()
     fields = list(map(int, score.split(':')))
 
-    show_table({
-        'rank': f'[b green]{get_rank(fields[0])}/{fields[5]}[/]',
-        'handle': f'[b green]{username}[/]',
-        'score': f'[b cyan]{fields[1]}/{fields[2]}[/]'
-    }, 'Global ranking')
+    show_table(
+        {
+            'rank': f'[b green]{get_rank(fields[0])}/{fields[5]}[/]',
+            'handle': f'[b green]{username}[/]',
+            'score': f'[b cyan]{fields[1]}/{fields[2]}[/]',
+        },
+        'Global ranking',
+    )
+
 
 def show_activity(user_id: int | None = None):
     if user_id is None:
@@ -152,7 +205,9 @@ def show_activity(user_id: int | None = None):
 
     activity = request(f'/activity/{user_id}', auth=False).json()
     if activity.get('success'):
-        timestamps = list(map(datetime.fromisoformat, activity['data']['solve_timestamps']))
+        timestamps = list(
+            map(datetime.fromisoformat, activity['data']['solve_timestamps'])
+        )
         if not timestamps:
             fail(f'No solves in the last year for user with ID {user_id}.')
             return
@@ -163,10 +218,14 @@ def show_activity(user_id: int | None = None):
         for week in range(53):
             for day in range(7):
                 current_date = first_monday + timedelta(week * 7 + day)
-                frequencies[day][week] = sum(1 if d.date() == current_date.date() else 0 for d in timestamps)
+                frequencies[day][week] = sum(
+                    1 if d.date() == current_date.date() else 0 for d in timestamps
+                )
                 max_frequency = max(max_frequency, frequencies[day][week])
 
-        table = Table(*['' for _ in range(56)], title='Hacking Activity', box=None, padding=0)
+        table = Table(
+            *['' for _ in range(56)], title='Hacking Activity', box=None, padding=0
+        )
         for week in range(53):
             for day in range(7):
                 current_date = first_monday + timedelta(week * 7 + day)
@@ -174,19 +233,25 @@ def show_activity(user_id: int | None = None):
                     for i, month_char in enumerate(current_date.strftime('%b')):
                         table.columns[week + i + 1].header = month_char
                 redblue = int(0x80 - 0x80 * frequencies[day][week] / max_frequency)
-                green = int(0x80 + 0x7f * frequencies[day][week] / max_frequency)
+                green = int(0x80 + 0x7F * frequencies[day][week] / max_frequency)
                 heatmap[day][week] = f'[#{redblue:02x}{green:02x}{redblue:02x}]■[/]'
 
-        for day_name, row in zip(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], heatmap):
+        for day_name, row in zip(
+            ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], heatmap
+        ):
             table.add_row(day_name + ' ', *row)
         rprint(table)
 
     else:
         error(f'User not found for ID {user_id}.')
 
+
 def get_wechall_rankings(page: int = 1, simple: bool = False):
     render_image = not simple and can_render_image()
-    wechall_html = request(f'https://www.wechall.net/site/ranking/for/104/pwn_college/page-{page}', auth=False)
+    wechall_html = request(
+        f'https://www.wechall.net/site/ranking/for/104/pwn_college/page-{page}',
+        auth=False,
+    )
     soup = BeautifulSoup(wechall_html.text, 'html.parser')
     images = {}
     wechall_data = []
@@ -212,10 +277,20 @@ def get_wechall_rankings(page: int = 1, simple: bool = False):
 
     return wechall_data
 
-def show_scoreboard(dojo_id: str | None = None, module_id: str | None = None, duration: str = 'all', page: int = 1, simple: bool = False):
+
+def show_scoreboard(
+    dojo_id: str | None = None,
+    module_id: str | None = None,
+    duration: str = 'all',
+    page: int = 1,
+    simple: bool = False,
+):
     if dojo_id:
         durations = {'week': 7, 'month': 30, 'all': 0}
-        endpoint = f'/scoreboard/{dojo_id}/{module_id or '_'}/{durations.get(duration.lower(), 0)}/{page}'
+        endpoint = (
+            f'/scoreboard/{dojo_id}/{module_id or "_"}/'
+            f'{durations.get(duration.lower(), 0)}/{page}'
+        )
         standings = request(endpoint, auth=False).json().get('standings')
         images = {}
         render_image = not simple and can_render_image()
@@ -226,7 +301,7 @@ def show_scoreboard(dojo_id: str | None = None, module_id: str | None = None, du
             belt_hex = get_belt_hex(belt)
 
             row['rank'] = get_rank(row['rank'])
-            row['handle'] = f'[b {belt_hex}]{row['name']}[/]'
+            row['handle'] = f'[b {belt_hex}]{row["name"]}[/]'
             row['badges'] = ''.join(sorted(badge['emoji'] for badge in row['badges']))
 
             if render_image:
@@ -241,11 +316,16 @@ def show_scoreboard(dojo_id: str | None = None, module_id: str | None = None, du
                 row['belt'] = f'[b {belt_hex}]{belt.title()}[/]'
                 row['role'] = 'ASU Student' if symbol == 'fork' else symbol.title()
 
-        title = f'Scoreboard for [b]{f'{dojo_id}/{module_id}' if module_id else dojo_id}[/]'
-        show_table(standings, title, ['rank', 'role', 'handle', 'belt', 'badges', 'solves'])
+        title = (
+            f'Scoreboard for [b]{f"{dojo_id}/{module_id}" if module_id else dojo_id}[/]'
+        )
+        show_table(
+            standings, title, ['rank', 'role', 'handle', 'belt', 'badges', 'solves']
+        )
 
     else:
         show_table(get_wechall_rankings(page, simple), 'WeChall rankings')
+
 
 def show_belts(belt: str | None = None, page: int | None = None, simple: bool = False):
     response = request('/belts', auth=False).json()
@@ -255,7 +335,9 @@ def show_belts(belt: str | None = None, page: int | None = None, simple: bool = 
         if belt in response['ranks']:
             images = {belt: download_image(f'/belt/{belt}.svg')}
         else:
-            images = {belt: download_image(f'/belt/{belt}.svg') for belt in response['ranks']}
+            images = {
+                belt: download_image(f'/belt/{belt}.svg') for belt in response['ranks']
+            }
 
     belts = []
     if belt in response['ranks']:
@@ -263,13 +345,15 @@ def show_belts(belt: str | None = None, page: int | None = None, simple: bool = 
         title = f'[b {belt_hex}]Belted Hackers[/]'
         for rank, id in enumerate(response['ranks'][belt]):
             user = response['users'][str(id)]
-            user['rank'] = f'[b green]{get_rank(rank + 1)}/{len(response['ranks'][belt])}[/]'
+            user['rank'] = (
+                f'[b green]{get_rank(rank + 1)}/{len(response["ranks"][belt])}[/]'
+            )
             user['id'] = id
-            user['handle'] = f'[b {belt_hex}]{user['handle']}[/]'
+            user['handle'] = f'[b {belt_hex}]{user["handle"]}[/]'
             if render_image:
                 user['belt'] = images[belt]
             else:
-                user['belt'] = f'[b {belt_hex}]{user['color'].title()}[/]'
+                user['belt'] = f'[b {belt_hex}]{user["color"].title()}[/]'
             user['website'] = user['site']
             user['date_ascended'] = user['date']
             user['date_ascended'] = datetime.fromisoformat(user['date'])
@@ -279,13 +363,13 @@ def show_belts(belt: str | None = None, page: int | None = None, simple: bool = 
         title = '[b]Belted Hackers[/]'
         for rank, (id, user) in enumerate(response['users'].items()):
             belt_hex = get_belt_hex(user['color'])
-            user['rank'] = f'[b green]{get_rank(rank + 1)}/{len(response['users'])}[/]'
+            user['rank'] = f'[b green]{get_rank(rank + 1)}/{len(response["users"])}[/]'
             user['id'] = int(id)
-            user['handle'] = f'[b {belt_hex}]{user['handle']}[/]'
+            user['handle'] = f'[b {belt_hex}]{user["handle"]}[/]'
             if render_image:
                 user['belt'] = images[user['color']]
             else:
-                user['belt'] = f'[b {belt_hex}]{user['color'].title()}[/]'
+                user['belt'] = f'[b {belt_hex}]{user["color"].title()}[/]'
             user['website'] = user['site']
             user['date_ascended'] = datetime.fromisoformat(user['date'])
             belts.append(user)
@@ -293,4 +377,6 @@ def show_belts(belt: str | None = None, page: int | None = None, simple: bool = 
     if page is not None:
         belts = paginate(belts, page)
 
-    show_table(belts, title, ['rank', 'id', 'handle', 'belt', 'website', 'date_ascended'])
+    show_table(
+        belts, title, ['rank', 'id', 'handle', 'belt', 'website', 'date_ascended']
+    )

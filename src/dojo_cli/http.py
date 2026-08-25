@@ -19,6 +19,8 @@ session_cache: Session | None = None
 cookie_cache: dict | None = None
 cookie_cache_path: Path | None = None
 cookie_cache_mtime: int | None = None
+DEFAULT_HTTP_TIMEOUT = (5, 30)
+
 
 def get_session() -> Session:
     global session_cache
@@ -26,11 +28,13 @@ def get_session() -> Session:
         session_cache = Session()
     return session_cache
 
+
 def clear_cookie_cache():
     global cookie_cache, cookie_cache_path, cookie_cache_mtime
     cookie_cache = None
     cookie_cache_path = None
     cookie_cache_mtime = None
+
 
 def delete_cookie():
     cookie_path = Path(load_user_config()['cookie_path']).expanduser().resolve()
@@ -38,6 +42,7 @@ def delete_cookie():
         error('You are not logged in.')
     cookie_path.unlink()
     clear_cookie_cache()
+
 
 def load_cookie(cookie_path: Path) -> dict | None:
     if not cookie_path.is_file():
@@ -55,10 +60,15 @@ def load_cookie(cookie_path: Path) -> dict | None:
     else:
         error('Cookie JSON is not a dictionary.')
 
+
 def get_cached_cookie(cookie_path: Path) -> dict:
     global cookie_cache, cookie_cache_path, cookie_cache_mtime
     cookie_mtime = cookie_path.stat().st_mtime_ns
-    if cookie_cache is None or cookie_cache_path != cookie_path or cookie_cache_mtime != cookie_mtime:
+    if (
+        cookie_cache is None
+        or cookie_cache_path != cookie_path
+        or cookie_cache_mtime != cookie_mtime
+    ):
         cookie_cache = load_cookie(cookie_path)
         cookie_cache_path = cookie_path
         cookie_cache_mtime = cookie_mtime
@@ -68,11 +78,14 @@ def get_cached_cookie(cookie_path: Path) -> dict:
         raise RuntimeError('unreachable')
     return cached_cookie
 
+
 def save_cookie(cookie_jar: dict):
     cookie_path = Path(load_user_config()['cookie_path']).expanduser().resolve()
     cookie_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     cookie_path.parent.chmod(0o700)
-    with tempfile.NamedTemporaryFile('w', dir=cookie_path.parent, delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(
+        'w', dir=cookie_path.parent, delete=False
+    ) as temp_file:
         json.dump(cookie_jar, temp_file)
         temporary = Path(temp_file.name)
     try:
@@ -82,18 +95,24 @@ def save_cookie(cookie_jar: dict):
         temporary.unlink(missing_ok=True)
     clear_cookie_cache()
 
+
 def get_origin(url: str) -> tuple[str, str | None, int | None]:
     """Return the scheme, hostname, and effective port for a URL."""
     parsed = urlparse(url)
     port = parsed.port
     if port is None:
-        port = 443 if parsed.scheme == 'https' else 80 if parsed.scheme == 'http' else None
+        port = (
+            443 if parsed.scheme == 'https' else 80 if parsed.scheme == 'http' else None
+        )
     return parsed.scheme, parsed.hostname, port
+
 
 def deserialize_auth_token(auth_token: str) -> list[int | str] | None:
     token_prefix = 'sk-workspace-local-'
     if auth_token.startswith(token_prefix):
-        token_data = URLSafeTimedSerializer('').loads_unsafe(auth_token[len(token_prefix):])[1]
+        token_data = URLSafeTimedSerializer('').loads_unsafe(
+            auth_token[len(token_prefix) :]
+        )[1]
         if (
             isinstance(token_data, list)
             and len(token_data) == 3
@@ -104,14 +123,38 @@ def deserialize_auth_token(auth_token: str) -> list[int | str] | None:
             return token_data
     return None
 
-def request(url: str, api: bool = True, auth: bool = True, csrf: bool = False, **kwargs):
+
+def authentication_available() -> bool:
+    """Return whether valid-looking local authentication is available."""
+    if deserialize_auth_token(os.getenv('DOJO_AUTH_TOKEN', '')):
+        return True
+    cookie_path = Path(load_user_config()['cookie_path']).expanduser().resolve()
+    if not cookie_path.is_file():
+        return False
+    try:
+        cookie_jar = json.loads(cookie_path.read_text())
+    except OSError, json.JSONDecodeError:
+        return False
+    return (
+        isinstance(cookie_jar, dict)
+        and isinstance(cookie_jar.get('session'), str)
+        and bool(cookie_jar['session'])
+    )
+
+
+def request(
+    url: str, api: bool = True, auth: bool = True, csrf: bool = False, **kwargs
+):
     user_config = load_user_config()
     session = kwargs.pop('session', None)
     if session is None:
         session = get_session()
-    method = kwargs.pop('method', 'POST' if 'data' in kwargs or 'json' in kwargs else 'GET')
+    method = kwargs.pop(
+        'method', 'POST' if 'data' in kwargs or 'json' in kwargs else 'GET'
+    )
     base_url = user_config['base_url']
     headers = dict(kwargs.pop('headers', {}))
+    kwargs.setdefault('timeout', DEFAULT_HTTP_TIMEOUT)
 
     if url.startswith(('http://', 'https://')):
         if auth and get_origin(url) != get_origin(base_url):
@@ -126,27 +169,36 @@ def request(url: str, api: bool = True, auth: bool = True, csrf: bool = False, *
             headers['Authorization'] = f'Bearer {dojo_auth_token}'
         elif cookie_path.is_file():
             cookie_jar = get_cached_cookie(cookie_path)
-            headers['Cookie'] = f'session={cookie_jar['session']}'
+            headers['Cookie'] = f'session={cookie_jar["session"]}'
         else:
             error('Request is not authorized, please login or run this in the dojo.')
 
-    if csrf:
-        csrf_response = session.get(base_url, headers=headers, allow_redirects=False)
-        if csrf_response.is_redirect:
-            error('Session expired, please login again.')
-        nonce = re.search(r''''csrfNonce': "([^"]+)"''', cast(str, csrf_response.text))
-        if nonce:
-            headers['CSRF-Token'] = nonce.group(1)
-            if 'data' in kwargs:
-                kwargs['data']['nonce'] = nonce.group(1)
-        else:
-            error('Failed to extract nonce.')
-
     if 'json' in kwargs:
         headers['Content-Type'] = 'application/json'
-        kwargs['data'] = json.dumps(kwargs.pop('json'))
 
     try:
+        if csrf:
+            csrf_response = session.get(
+                base_url,
+                headers=headers,
+                allow_redirects=False,
+                timeout=kwargs['timeout'],
+            )
+            if csrf_response.is_redirect:
+                error('Session expired, please login again.')
+            nonce = re.search(
+                r''''csrfNonce': "([^"]+)"''', cast(str, csrf_response.text)
+            )
+            if not nonce:
+                error('Failed to extract nonce.')
+            headers['CSRF-Token'] = nonce.group(1)
+            payload = kwargs.get('json', kwargs.get('data'))
+            if payload is not None:
+                if not isinstance(payload, dict):
+                    error('CSRF requests require object data.')
+                payload['nonce'] = nonce.group(1)
+        if 'json' in kwargs:
+            kwargs['data'] = json.dumps(kwargs.pop('json'))
         if auth:
             kwargs.setdefault('allow_redirects', False)
         response = session.request(method, url, headers=headers, **kwargs)
