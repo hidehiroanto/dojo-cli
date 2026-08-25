@@ -267,7 +267,7 @@ class StartChallengeModal(ModalScreen):
                     disabled=self.allow_privileged is False,
                 )
             with Horizontal(id='cancel-actions'):
-                yield Button('Cancel', id='cancel')
+                yield Button('Cancel', id='cancel', variant='error')
 
     def on_key(self, event) -> None:
         focused_id = self.focused.id if self.focused else None
