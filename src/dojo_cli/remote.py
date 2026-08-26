@@ -14,22 +14,13 @@ from shutil import which
 from time import monotonic
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import (
-    Encoding,
-    NoEncryption,
-    PrivateFormat,
-    PublicFormat,
-)
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
 
 from .client import get_remote_client
 from .config import load_user_config
 from .constants import XDG_BIN_HOME
 from .http import authentication_available, request
-from .install import (
-    configured_package_manager,
-    package_manager_install,
-    require_executable,
-)
+from .install import configured_package_manager, package_manager_install, require_executable
 from .log import error, info, success, warn
 from .terminal import apply_style
 
@@ -66,9 +57,7 @@ def ssh_keygen():
     ssh_config = user_config['ssh']
     ssh_config_file = Path(ssh_config['config_file']).expanduser().resolve()
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
-    ssh_public_identity_file = ssh_identity_file.parent.joinpath(
-        f'{ssh_identity_file.name}.pub'
-    )
+    ssh_public_identity_file = ssh_identity_file.parent.joinpath(f'{ssh_identity_file.name}.pub')
 
     ssh_identity_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     ssh_identity_file.parent.chmod(0o700)
@@ -82,17 +71,11 @@ def ssh_keygen():
             return
 
     private_key = Ed25519PrivateKey.generate()
-    ssh_identity_file.write_bytes(
-        private_key.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption())
-    )
+    ssh_identity_file.write_bytes(private_key.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption()))
     ssh_identity_file.chmod(0o600)
     success(f'Saved SSH private key to {apply_style(ssh_identity_file)}.')
 
-    public_key = (
-        private_key.public_key()
-        .public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH)
-        .decode()
-    )
+    public_key = private_key.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode()
     ssh_public_identity_file.write_text(public_key)
     ssh_public_identity_file.chmod(0o644)
     success(f'Saved SSH public key to {apply_style(ssh_public_identity_file)}.')
@@ -108,12 +91,8 @@ def ssh_keygen():
         ssh_config_data += f'  Port {ssh_config["Port"]}\n'
         ssh_config_data += f'  User {ssh_config["User"]}\n'
         ssh_config_data += f'  IdentityFile {ssh_identity_file}\n'
-        ssh_config_data += (
-            f'  ServerAliveCountMax {ssh_config["ServerAliveCountMax"]}\n'
-        )
-        ssh_config_data += (
-            f'  ServerAliveInterval {ssh_config["ServerAliveInterval"]}\n'
-        )
+        ssh_config_data += f'  ServerAliveCountMax {ssh_config["ServerAliveCountMax"]}\n'
+        ssh_config_data += f'  ServerAliveInterval {ssh_config["ServerAliveInterval"]}\n'
         ssh_config_file.write_text(ssh_config_data)
         info(f'Updated SSH configuration at {apply_style(ssh_config_file)}.')
 
@@ -121,27 +100,15 @@ def ssh_keygen():
         response = request('/ssh_key', json={'ssh_key': public_key}).json()
         if response['success']:
             success('Successfully added public key to user settings.')
-            success(
-                'You can now connect to the remote server after starting a challenge.'
-            )
+            success('You can now connect to the remote server after starting a challenge.')
         else:
             error(f'Something went wrong: {response["error"]}')
     else:
         ssh_key_url = f'{user_config["base_url"]}/settings#ssh-key'
         info(f'Public key: [b cyan]{public_key}[/]')
-        info(
-            'Not logged in, could not automatically add the public key to '
-            'your user settings.'
-        )
-        info(
-            f'Use a browser to log into '
-            f'{apply_style(user_config["base_url"])} and navigate to '
-            f'{apply_style(ssh_key_url)}.'
-        )
-        info(
-            'Enter the above key into the [b cyan]Add New SSH Key[/] field, '
-            'and then click [b cyan]Add[/].'
-        )
+        info('Not logged in, could not automatically add the public key to your user settings.')
+        info(f'Use a browser to log into {apply_style(user_config["base_url"])} and navigate to {apply_style(ssh_key_url)}.')
+        info('Enter the above key into the [b cyan]Add New SSH Key[/] field, and then click [b cyan]Add[/].')
 
 
 def bat_file(path: Path):
@@ -153,9 +120,7 @@ def bat_file(path: Path):
         elif not os.access(path, os.R_OK):
             error(f'Permission to read {apply_style(path)} denied.')
 
-        completed = subprocess.run(
-            [which('bat') or '/run/dojo/bin/bat', str(path)], check=False
-        )
+        completed = subprocess.run([which('bat') or '/run/dojo/bin/bat', str(path)], check=False)
         if completed.returncode:
             raise SystemExit(completed.returncode)
 
@@ -209,9 +174,7 @@ def edit_path(editor: str, path: Path | None = None):
         elif editor in ['nano'] and path.is_dir():
             error(f'{editor} does not support opening directories.')
 
-        completed = subprocess.run(
-            [editor, str(path)] if path else [editor], check=False
-        )
+        completed = subprocess.run([editor, str(path)] if path else [editor], check=False)
         if completed.returncode:
             raise SystemExit(completed.returncode)
 
@@ -246,20 +209,9 @@ def run_openssh(
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
     pty_option = '-t' if pty else '-T'
 
-    if (
-        ssh_config_file.is_file()
-        and f'Host {ssh_config["Host"]}' in ssh_config_file.read_text()
-    ):
-        ssh_args = [
-            str(ssh),
-            pty_option,
-            '-F',
-            str(ssh_config_file),
-            ssh_config['Host'],
-        ]
-    elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith(
-        '-----BEGIN OPENSSH PRIVATE KEY-----'
-    ):
+    if ssh_config_file.is_file() and f'Host {ssh_config["Host"]}' in ssh_config_file.read_text():
+        ssh_args = [str(ssh), pty_option, '-F', str(ssh_config_file), ssh_config['Host']]
+    elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
         ssh_args = [
             str(ssh),
             pty_option,
@@ -274,17 +226,12 @@ def run_openssh(
             f'{ssh_config["User"]}@{ssh_config["HostName"]}',
         ]
     else:
-        error(
-            'Something went wrong with the SSH config file or the SSH key. '
-            'Please make sure at least one is valid.'
-        )
+        error('Something went wrong with the SSH config file or the SSH key. Please make sure at least one is valid.')
 
     if command:
         ssh_args.append(command)
 
-    completed_process = subprocess.run(
-        ssh_args, capture_output=capture_output, input=payload, check=False
-    )
+    completed_process = subprocess.run(ssh_args, capture_output=capture_output, input=payload, check=False)
     stdout = completed_process.stdout or b''
     stderr = completed_process.stderr or b''
     if max_output_bytes is not None:
@@ -341,10 +288,7 @@ def run_paramiko(
                     deadline = monotonic() + PROMPT_TIMEOUT
                     while not output.endswith(b'$ '):
                         remaining = deadline - monotonic()
-                        if (
-                            remaining <= 0
-                            or not select.select([channel], [], [], remaining)[0]
-                        ):
+                        if remaining <= 0 or not select.select([channel], [], [], remaining)[0]:
                             error('Timed out waiting for the remote shell prompt.')
                         if channel.recv_ready():
                             output += channel.recv(BUFFER_SIZE)
@@ -379,17 +323,11 @@ def run_paramiko(
                         if channel.recv_stderr_ready():
                             buffer = channel.recv_stderr(BUFFER_SIZE)
                             if capture_output:
-                                error_output = append_output(
-                                    error_output, buffer, max_output_bytes
-                                )
+                                error_output = append_output(error_output, buffer, max_output_bytes)
                             else:
                                 sys.stderr.buffer.write(buffer)
                                 sys.stderr.buffer.flush()
-                        if (
-                            channel.exit_status_ready()
-                            and not channel.recv_ready()
-                            and not channel.recv_stderr_ready()
-                        ):
+                        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
                             break
                     except TimeoutError:
                         pass
@@ -427,11 +365,7 @@ def run_cmd(
 
     if client_type == 'local' or 'DOJO_AUTH_TOKEN' in os.environ:
         completed_process = subprocess.run(
-            command or 'bash',
-            shell=True,
-            capture_output=capture_output,
-            input=payload,
-            check=False,
+            command or 'bash', shell=True, capture_output=capture_output, input=payload, check=False
         )
         stdout = completed_process.stdout or b''
         stderr = completed_process.stderr or b''
@@ -457,9 +391,7 @@ def run_cmd(
         error(f'Invalid client type: {client_type}')
 
 
-def download_file(
-    remote_path: Path, local_path: Path | None = None, log_success: bool = True
-):
+def download_file(remote_path: Path, local_path: Path | None = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):
@@ -483,9 +415,7 @@ def download_file(
         success(f'Downloaded {remote_path} to {local_path}')
 
 
-def upload_file(
-    local_path: Path, remote_path: Path | None = None, log_success: bool = True
-):
+def upload_file(local_path: Path, remote_path: Path | None = None, log_success: bool = True):
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
     if not request('/docker').json().get('success'):

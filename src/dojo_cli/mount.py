@@ -10,14 +10,7 @@ from typing import Literal, cast
 from .config import load_user_config
 from .constants import UNAME_SYSTEM, XDG_BIN_HOME
 from .http import request
-from .install import (
-    confirm_install,
-    find_executable,
-    homebrew_install,
-    nanobrew_install,
-    package_manager_install,
-    wax_install,
-)
+from .install import confirm_install, find_executable, homebrew_install, nanobrew_install, package_manager_install, wax_install
 from .log import error, info, warn
 
 type MountImplementation = Literal['sshfs', 'mfusepy']
@@ -25,27 +18,15 @@ type FuseProvider = Literal['auto', 'fuse-t', 'macfuse']
 
 IMPLEMENTATIONS = {'sshfs', 'mfusepy'}
 PROVIDERS = {'auto', 'fuse-t', 'macfuse'}
-FUSE_LIBRARIES = {
-    'fuse-t': Path('/usr/local/lib/libfuse-t.dylib'),
-    'macfuse': Path('/usr/local/lib/libfuse.dylib'),
-}
-SSHFS_RECEIPTS = {
-    'fuse-t': 'org.sshfs.',
-    'macfuse': 'io.macfuse.installer.components.sshfs',
-}
-SSHFS_FALLBACKS = [
-    XDG_BIN_HOME / 'sshfs',
-    Path('/usr/local/bin/sshfs'),
-    Path('/usr/bin/sshfs'),
-]
+FUSE_LIBRARIES = {'fuse-t': Path('/usr/local/lib/libfuse-t.dylib'), 'macfuse': Path('/usr/local/lib/libfuse.dylib')}
+SSHFS_RECEIPTS = {'fuse-t': 'org.sshfs.', 'macfuse': 'io.macfuse.installer.components.sshfs'}
+SSHFS_FALLBACKS = [XDG_BIN_HOME / 'sshfs', Path('/usr/local/bin/sshfs'), Path('/usr/bin/sshfs')]
 
 
 def package_receipts() -> set[str]:
     """Return package receipts installed on macOS."""
     try:
-        result = subprocess.run(
-            ['pkgutil', '--pkgs'], check=True, capture_output=True, text=True
-        )
+        result = subprocess.run(['pkgutil', '--pkgs'], check=True, capture_output=True, text=True)
     except (OSError, subprocess.CalledProcessError) as exc:
         error(f'Could not inspect installed macOS packages: {exc}')
     return set(result.stdout.splitlines())
@@ -54,23 +35,15 @@ def package_receipts() -> set[str]:
 def installed_sshfs_providers(receipts: set[str] | None = None) -> set[str]:
     """Return providers with installed SSHFS package receipts."""
     receipts = package_receipts() if receipts is None else receipts
-    return {
-        provider
-        for provider, prefix in SSHFS_RECEIPTS.items()
-        if any(receipt.startswith(prefix) for receipt in receipts)
-    }
+    return {provider for provider, prefix in SSHFS_RECEIPTS.items() if any(receipt.startswith(prefix) for receipt in receipts)}
 
 
 def installed_runtime_providers() -> set[str]:
     """Return providers with an available libfuse compatibility library."""
-    return {
-        provider for provider, library in FUSE_LIBRARIES.items() if library.is_file()
-    }
+    return {provider for provider, library in FUSE_LIBRARIES.items() if library.is_file()}
 
 
-def resolve_mount_options(
-    implementation: str | None, provider: str | None
-) -> tuple[MountImplementation, FuseProvider]:
+def resolve_mount_options(implementation: str | None, provider: str | None) -> tuple[MountImplementation, FuseProvider]:
     """Resolve and validate command overrides and configured mount defaults."""
     mount_config = load_user_config()['mount']
     implementation = implementation or mount_config['implementation']
@@ -82,9 +55,7 @@ def resolve_mount_options(
     return cast(MountImplementation, implementation), cast(FuseProvider, provider)
 
 
-def resolve_provider(
-    requested: FuseProvider, implementation: MountImplementation
-) -> str:
+def resolve_provider(requested: FuseProvider, implementation: MountImplementation) -> str:
     """Resolve automatic provider selection and reject ambiguous installations."""
     if UNAME_SYSTEM != 'Darwin':
         if requested != 'auto':
@@ -95,15 +66,11 @@ def resolve_provider(
         installed = installed_sshfs_providers()
         if len(installed) > 1:
             error(
-                'Both fuse-t-sshfs and sshfs-mac are installed and claim '
-                '/usr/local/bin/sshfs. Uninstall one before mounting.'
+                'Both fuse-t-sshfs and sshfs-mac are installed and claim /usr/local/bin/sshfs. Uninstall one before mounting.'
             )
         if requested != 'auto' and installed and requested not in installed:
             installed_provider = next(iter(installed))
-            error(
-                f'The installed SSHFS client belongs to {installed_provider}, '
-                f'not {requested}.'
-            )
+            error(f'The installed SSHFS client belongs to {installed_provider}, not {requested}.')
         return requested if requested != 'auto' else next(iter(installed), 'fuse-t')
 
     if requested != 'auto':
@@ -140,9 +107,7 @@ def install_fuse_provider(provider: str, include_sshfs: bool, package_manager: s
         nanobrew_install(casks=[cask])
     elif package_manager == 'wax':
         if include_sshfs:
-            warn(
-                f'Wax cannot reliably install {display_name}, falling back to Homebrew.'
-            )
+            warn(f'Wax cannot reliably install {display_name}, falling back to Homebrew.')
             taps = ['macos-fuse-t/cask'] if provider == 'fuse-t' else None
             homebrew_install(casks=[cask], taps=taps)
         else:
@@ -168,16 +133,10 @@ def ensure_sshfs_provider(provider: str, package_manager: str) -> Path:
     """Ensure one unambiguous matched SSHFS stack is installed."""
     installed = installed_sshfs_providers()
     if len(installed) > 1:
-        error(
-            'Both fuse-t-sshfs and sshfs-mac are installed and claim '
-            '/usr/local/bin/sshfs. Uninstall one before mounting.'
-        )
+        error('Both fuse-t-sshfs and sshfs-mac are installed and claim /usr/local/bin/sshfs. Uninstall one before mounting.')
     if installed and provider not in installed:
         installed_provider = next(iter(installed))
-        error(
-            f'The installed SSHFS client belongs to {installed_provider}, '
-            f'not {provider}.'
-        )
+        error(f'The installed SSHFS client belongs to {installed_provider}, not {provider}.')
     if not installed:
         install_fuse_provider(provider, True, package_manager)
         installed = installed_sshfs_providers()
@@ -209,11 +168,7 @@ def load_mfusepy(provider: str) -> ModuleType:
     return mfusepy
 
 
-def mount_remote(
-    mount_point: Path | None = None,
-    implementation: str | None = None,
-    provider: str | None = None,
-):
+def mount_remote(mount_point: Path | None = None, implementation: str | None = None, provider: str | None = None):
     """Mount the configured remote project path locally."""
     if 'DOJO_AUTH_TOKEN' in os.environ:
         error('Please run this locally instead of on the dojo.')
@@ -249,14 +204,7 @@ def mount_remote(
         info('Unmounting the filesystem...')
     elif UNAME_SYSTEM == 'Darwin':
         sshfs = ensure_sshfs_provider(selected_provider, package_manager)
-        mount_sshfs(
-            sshfs,
-            mount_point,
-            project_path,
-            ssh_config,
-            ssh_config_file,
-            ssh_identity_file,
-        )
+        mount_sshfs(sshfs, mount_point, project_path, ssh_config, ssh_config_file, ssh_identity_file)
     elif UNAME_SYSTEM == 'Linux':
         sshfs = find_executable('sshfs', SSHFS_FALLBACKS)
         if sshfs is None:
@@ -265,14 +213,7 @@ def mount_remote(
             sshfs = find_executable('sshfs', SSHFS_FALLBACKS)
         if sshfs is None:
             error('SSHFS is still missing after installation.')
-        mount_sshfs(
-            sshfs,
-            mount_point,
-            project_path,
-            ssh_config,
-            ssh_config_file,
-            ssh_identity_file,
-        )
+        mount_sshfs(sshfs, mount_point, project_path, ssh_config, ssh_config_file, ssh_identity_file)
     elif UNAME_SYSTEM == 'Windows':
         error('Windows is not yet supported.')
     else:
@@ -282,31 +223,14 @@ def mount_remote(
 
 
 def mount_sshfs(
-    sshfs: Path,
-    mount_point: Path,
-    project_path: Path,
-    ssh_config: dict,
-    ssh_config_file: Path,
-    ssh_identity_file: Path,
+    sshfs: Path, mount_point: Path, project_path: Path, ssh_config: dict, ssh_config_file: Path, ssh_identity_file: Path
 ):
     """Run SSHFS using the configured SSH host or identity."""
-    if (
-        ssh_config_file.is_file()
-        and f'Host {ssh_config["Host"]}' in ssh_config_file.read_text()
-    ):
+    if ssh_config_file.is_file() and f'Host {ssh_config["Host"]}' in ssh_config_file.read_text():
         subprocess.run(
-            [
-                str(sshfs),
-                '-F',
-                str(ssh_config_file),
-                f'{ssh_config["Host"]}:{project_path}',
-                str(mount_point),
-            ],
-            check=True,
+            [str(sshfs), '-F', str(ssh_config_file), f'{ssh_config["Host"]}:{project_path}', str(mount_point)], check=True
         )
-    elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith(
-        '-----BEGIN OPENSSH PRIVATE KEY-----'
-    ):
+    elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
         subprocess.run(
             [
                 str(sshfs),
@@ -324,28 +248,19 @@ def mount_sshfs(
             check=True,
         )
     else:
-        error(
-            'Something went wrong with the SSH config file or the SSH key. '
-            'Please make sure at least one is valid.'
-        )
+        error('Something went wrong with the SSH config file or the SSH key. Please make sure at least one is valid.')
 
 
 def unmount_remote(mount_point: Path | None = None, force: bool = False):
     """Unmount a local remote-project mount point."""
-    mount_point = (
-        Path(mount_point or load_user_config()['ssh']['mount_point'])
-        .expanduser()
-        .resolve()
-    )
+    mount_point = Path(mount_point or load_user_config()['ssh']['mount_point']).expanduser().resolve()
     if UNAME_SYSTEM == 'Darwin':
         command = ['diskutil', 'unmount']
         if force:
             command.append('force')
         subprocess.run([*command, str(mount_point)], check=True)
     elif UNAME_SYSTEM == 'Linux':
-        subprocess.run(
-            ['umount', *(['-f'] if force else []), str(mount_point)], check=True
-        )
+        subprocess.run(['umount', *(['-f'] if force else []), str(mount_point)], check=True)
     elif UNAME_SYSTEM == 'Windows':
         subprocess.run(['net', 'use', str(mount_point), '/d', '/y'], check=True)
     else:

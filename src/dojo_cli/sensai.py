@@ -26,11 +26,7 @@ from .config import load_user_config
 from .http import load_cookie, request
 from .log import error, fail, info, success, warn
 from .remote import CommandResult, run_cmd
-from .socketio_niquests import (
-    SocketIoSession,
-    SocketIoSimpleClient,
-    close_socketio_client,
-)
+from .socketio_niquests import SocketIoSession, SocketIoSimpleClient, close_socketio_client
 
 WELCOME_BANNER = r"""```
 __        __   _                            _
@@ -69,10 +65,7 @@ def limit_text(text: str, limit: int) -> str:
     if len(encoded) <= limit:
         return text
     marker = TRUNCATION_MARKER.encode()
-    return (
-        encoded[: max(0, limit - len(marker))].decode(errors='replace')
-        + TRUNCATION_MARKER
-    )
+    return encoded[: max(0, limit - len(marker))].decode(errors='replace') + TRUNCATION_MARKER
 
 
 def append_context(context: str, addition: str) -> str:
@@ -113,17 +106,11 @@ def format_command_context(command: str, result: CommandResult) -> str:
 SLASH_COMMANDS = {
     'exit': lambda app, *argv: app.exit(),
     'h': lambda app, *argv: app.query_one(VerticalScroll).mount(Markdown(INSTRUCTIONS)),
-    'help': lambda app, *argv: app.query_one(VerticalScroll).mount(
-        Markdown(INSTRUCTIONS)
-    ),
+    'help': lambda app, *argv: app.query_one(VerticalScroll).mount(Markdown(INSTRUCTIONS)),
     'q': lambda app, *argv: app.exit(),
     'quit': lambda app, *argv: app.exit(),
-    'w': lambda app, *argv: app.query_one(VerticalScroll).mount(
-        Markdown(WELCOME_BANNER)
-    ),
-    'welcome': lambda app, *argv: app.query_one(VerticalScroll).mount(
-        Markdown(WELCOME_BANNER)
-    ),
+    'w': lambda app, *argv: app.query_one(VerticalScroll).mount(Markdown(WELCOME_BANNER)),
+    'welcome': lambda app, *argv: app.query_one(VerticalScroll).mount(Markdown(WELCOME_BANNER)),
 }
 
 
@@ -203,11 +190,7 @@ class SensaiApp(App):
             await response.read()
             await response.close()
             self.sio = SocketIoSimpleClient(http_session=self.http_session)
-            await self.sio.connect(
-                self.base_url,
-                transports=['websocket'],
-                socketio_path='sensai/socket.io',
-            )
+            await self.sio.connect(self.base_url, transports=['websocket'], socketio_path='sensai/socket.io')
         except OSError, RequestException, SocketIOConnectionError:
             await self.disconnect_sensai()
             raise
@@ -226,10 +209,7 @@ class SensaiApp(App):
         try:
             await self.connect_sensai()
         except (OSError, RequestException, SocketIOConnectionError) as exc:
-            self.exit(
-                return_code=1,
-                message=RichMarkdown(f'**Failed to connect to SensAI:** `{exc}`'),
-            )
+            self.exit(return_code=1, message=RichMarkdown(f'**Failed to connect to SensAI:** `{exc}`'))
             return
 
         self.call_after_refresh(self.start_app)
@@ -240,20 +220,13 @@ class SensaiApp(App):
 
     def add_file_context(self, filenames: list[str]):
         for filename in filenames:
-            self.file_context = append_context(
-                self.file_context, format_file_context(self.remote_client, filename)
-            )
+            self.file_context = append_context(self.file_context, format_file_context(self.remote_client, filename))
 
     async def run_shell_cmd(self):
         vertical_scroll = self.query_one(VerticalScroll)
         command = self.user_message[1:].strip()
         self.user_message = ''
-        result = run_cmd(
-            command,
-            capture_output=True,
-            pty=False,
-            max_output_bytes=MAX_COMMAND_CONTEXT_BYTES + 1,
-        )
+        result = run_cmd(command, capture_output=True, pty=False, max_output_bytes=MAX_COMMAND_CONTEXT_BYTES + 1)
         command_context = format_command_context(command, result)
         self.terminal_context = append_context(self.terminal_context, command_context)
         await vertical_scroll.mount(Markdown(f'```\n{command_context}\n```'))
@@ -273,57 +246,27 @@ class SensaiApp(App):
         vertical_scroll = self.query_one(VerticalScroll)
         try:
             self.add_file_context(re.findall(r'@(\S+)', self.user_message))
-            content = {
-                'message': self.user_message,
-                'terminal': self.terminal_context,
-                'file': self.file_context,
-            }
-            await self.sio.emit(
-                'new_interaction', {'type': 'learner', 'content': content}
-            )
+            content = {'message': self.user_message, 'terminal': self.terminal_context, 'file': self.file_context}
+            await self.sio.emit('new_interaction', {'type': 'learner', 'content': content})
             self.user_message, self.terminal_context, self.file_context = '', '', ''
 
             event = await self.sio.receive(timeout=self.timeout)
             if event[0] == 'new_interaction':
                 assistant_message = event[1]['content']['message']
             elif event[0] == 'user_rate_limit':
-                remaining = max(
-                    [
-                        limit['remaining']
-                        for limit in event[1]
-                        if limit['remaining'] is not None
-                    ]
-                    + [0]
-                )
-                assistant_message = (
-                    f'User rate limit: Please wait {remaining} seconds before '
-                    'sending your message.'
-                )
+                remaining = max([limit['remaining'] for limit in event[1] if limit['remaining'] is not None] + [0])
+                assistant_message = f'User rate limit: Please wait {remaining} seconds before sending your message.'
             else:
                 assistant_message = f'Unknown event: {event}'
 
             await vertical_scroll.mount(Markdown(f'**SensAI:** {assistant_message}'))
         except TimeoutError:
             timeout_message = (
-                'No response received.'
-                if self.timeout is None
-                else f'No response after {self.timeout:g} seconds.'
+                'No response received.' if self.timeout is None else f'No response after {self.timeout:g} seconds.'
             )
-            await vertical_scroll.mount(
-                Markdown(f'**SensAI timeout:** {timeout_message}')
-            )
-        except (
-            KeyError,
-            OSError,
-            RequestException,
-            RuntimeError,
-            SocketIOConnectionError,
-            TypeError,
-            ValueError,
-        ) as exc:
-            await vertical_scroll.mount(
-                Markdown(f'**SensAI connection error:** `{exc}`')
-            )
+            await vertical_scroll.mount(Markdown(f'**SensAI timeout:** {timeout_message}'))
+        except (KeyError, OSError, RequestException, RuntimeError, SocketIOConnectionError, TypeError, ValueError) as exc:
+            await vertical_scroll.mount(Markdown(f'**SensAI connection error:** `{exc}`'))
         finally:
             vertical_scroll.scroll_end()
             self.restore_input()
@@ -346,22 +289,16 @@ class SensaiApp(App):
                 if command in SLASH_COMMANDS:
                     SLASH_COMMANDS[command](self, *command_args[1:])
                 else:
-                    await vertical_scroll.mount(
-                        Markdown(f'**Unknown command:** `{self.user_message}`')
-                    )
+                    await vertical_scroll.mount(Markdown(f'**Unknown command:** `{self.user_message}`'))
                 vertical_scroll.scroll_end()
 
             elif self.user_message.startswith('!'):
                 if '````' in self.user_message:
                     command_md = f'**Command:** {self.user_message[1:].strip()}\n'
                 elif '```' in self.user_message:
-                    command_md = (
-                        f'**Command:** ```` {self.user_message[1:].strip()} ````\n'
-                    )
+                    command_md = f'**Command:** ```` {self.user_message[1:].strip()} ````\n'
                 elif '``' in self.user_message:
-                    command_md = (
-                        f'**Command:** ``` {self.user_message[1:].strip()} ```\n'
-                    )
+                    command_md = f'**Command:** ``` {self.user_message[1:].strip()} ```\n'
                 elif '`' in self.user_message:
                     command_md = f'**Command:** `` {self.user_message[1:].strip()} ``\n'
                 else:
@@ -374,38 +311,22 @@ class SensaiApp(App):
                 input_box.placeholder = 'Waiting...'
                 self.set_focus(vertical_scroll, scroll_visible=False)
                 vertical_scroll.call_after_refresh(
-                    lambda: vertical_scroll.scroll_to(
-                        y=vertical_scroll.max_scroll_y, animate=True
-                    )
+                    lambda: vertical_scroll.scroll_to(y=vertical_scroll.max_scroll_y, animate=True)
                 )
                 self.call_after_refresh(
                     lambda: self.run_worker(
-                        self.run_shell_cmd(),
-                        name='sensai-shell',
-                        group='sensai-shell',
-                        exclusive=True,
-                        exit_on_error=False,
+                        self.run_shell_cmd(), name='sensai-shell', group='sensai-shell', exclusive=True, exit_on_error=False
                     )
                 )
 
             else:
-                await vertical_scroll.mount(
-                    Markdown(
-                        f'**You:** {re.sub(r"@(\S+)", r"`@\1`", self.user_message)}'
-                    )
-                )
+                await vertical_scroll.mount(Markdown(f'**You:** {re.sub(r"@(\S+)", r"`@\1`", self.user_message)}'))
                 self.query_one(Button).disabled = True
                 input_box.disabled = True
-                input_box.placeholder = (
-                    'Waiting...'
-                    if self.timeout is None
-                    else f'Waiting up to {self.timeout:g}s...'
-                )
+                input_box.placeholder = 'Waiting...' if self.timeout is None else f'Waiting up to {self.timeout:g}s...'
                 self.set_focus(vertical_scroll, scroll_visible=False)
                 vertical_scroll.call_after_refresh(
-                    lambda: vertical_scroll.scroll_to(
-                        y=vertical_scroll.max_scroll_y, animate=True
-                    )
+                    lambda: vertical_scroll.scroll_to(y=vertical_scroll.max_scroll_y, animate=True)
                 )
                 self.call_after_refresh(
                     lambda: self.run_worker(
@@ -445,34 +366,21 @@ class SensaiApp(App):
 
         elif input_box.value.startswith('!'):
             if not self.shell_commands:
-                path_dirs = (
-                    self.remote_client.ssh.exec_command('echo $PATH')[1]
-                    .read()
-                    .decode()
-                    .split(':')
-                )
+                path_dirs = self.remote_client.ssh.exec_command('echo $PATH')[1].read().decode().split(':')
                 fd_args = ['fd', '-Lapu', '-tx', '.'] + path_dirs
-                command_stdout = self.remote_client.ssh.exec_command(
-                    shlex.join(fd_args)
-                )[1].read()
-                self.shell_commands = sorted(
-                    {Path(p).name for p in command_stdout.decode().splitlines()}
-                )
+                command_stdout = self.remote_client.ssh.exec_command(shlex.join(fd_args))[1].read()
+                self.shell_commands = sorted({Path(p).name for p in command_stdout.decode().splitlines()})
 
             for cmd in self.shell_commands:
                 if cmd.startswith(input_box.value[1:]):
                     new_options.append(f'!{cmd}')
 
         else:
-            file_query_casefold = self.get_file_query_at_cursor(
-                input_box.value, input_box.cursor_position
-            )
+            file_query_casefold = self.get_file_query_at_cursor(input_box.value, input_box.cursor_position)
             if file_query_casefold is None:
                 return
 
-            new_options = self.get_cached_file_options(
-                file_query_casefold, require_min_results=False
-            )
+            new_options = self.get_cached_file_options(file_query_casefold, require_min_results=False)
             if new_options is None:
                 self.request_file_options(file_query_casefold)
                 return
@@ -498,9 +406,7 @@ class SensaiApp(App):
     def is_fuzzy_match(self, query: str, candidate: str) -> bool:
         return self.get_fuzzy_match_positions(query, candidate.casefold()) is not None
 
-    def get_file_option_rank(
-        self, query: str, option: str
-    ) -> tuple[int, int, int, int, int, int, int, int] | None:
+    def get_file_option_rank(self, query: str, option: str) -> tuple[int, int, int, int, int, int, int, int] | None:
         option_casefold = option.casefold()
         positions = self.get_fuzzy_match_positions(query, option_casefold)
         if positions is None:
@@ -509,22 +415,12 @@ class SensaiApp(App):
         query_basename = query.rsplit('/', 1)[-1]
         option_basename = option_casefold.rsplit('/', 1)[-1]
         substring_position = option_casefold.find(query)
-        basename_substring_position = (
-            option_basename.find(query_basename) if query_basename else -1
-        )
+        basename_substring_position = option_basename.find(query_basename) if query_basename else -1
         contiguous_position = min(
-            (
-                position
-                for position in [substring_position, basename_substring_position]
-                if position >= 0
-            ),
-            default=-1,
+            (position for position in [substring_position, basename_substring_position] if position >= 0), default=-1
         )
         boundary_matches = sum(
-            1
-            for position in positions
-            if position == 0
-            or option_casefold[position - 1] in self.PATH_MATCH_BOUNDARIES
+            1 for position in positions if position == 0 or option_casefold[position - 1] in self.PATH_MATCH_BOUNDARIES
         )
 
         return (
@@ -540,9 +436,7 @@ class SensaiApp(App):
 
     def get_ranked_file_options(self, query: str, options: list[str]) -> list[str]:
         ranked_options = [
-            (rank, option)
-            for option in options
-            if (rank := self.get_file_option_rank(query, option)) is not None
+            (rank, option) for option in options if (rank := self.get_file_option_rank(query, option)) is not None
         ]
         ranked_options.sort(key=lambda item: item[0])
         return [option for _, option in ranked_options]
@@ -550,9 +444,7 @@ class SensaiApp(App):
     def get_visible_file_options(self, options: list[str]) -> list[str]:
         return options[: self.MAX_OPTIONS]
 
-    def get_cached_file_options(
-        self, query: str, require_min_results: bool = True
-    ) -> list[str] | None:
+    def get_cached_file_options(self, query: str, require_min_results: bool = True) -> list[str] | None:
         cached = self.option_cache.get(query)
         if cached:
             cached_at, options = cached
@@ -561,14 +453,10 @@ class SensaiApp(App):
                 return self.get_visible_file_options(options)
             self.option_cache.pop(query)
 
-        for cached_query, (cached_at, options) in reversed(
-            list(self.option_cache.items())
-        ):
+        for cached_query, (cached_at, options) in reversed(list(self.option_cache.items())):
             is_refinement = query.startswith(cached_query)
             is_backtrack = cached_query.startswith(query)
-            if (is_refinement or is_backtrack) and self.is_file_option_cache_fresh(
-                cached_at
-            ):
+            if (is_refinement or is_backtrack) and self.is_file_option_cache_fresh(cached_at):
                 self.option_cache.move_to_end(cached_query)
                 filtered_options = self.get_ranked_file_options(query, options)
                 if len(filtered_options) >= self.FILE_OPTION_CACHE_MIN_RESULTS or (
@@ -580,17 +468,12 @@ class SensaiApp(App):
         return None
 
     def cache_file_options(self, query: str, options: list[str]):
-        self.option_cache[query] = (
-            monotonic(),
-            options[: self.FILE_OPTION_CACHE_RESULT_SIZE],
-        )
+        self.option_cache[query] = (monotonic(), options[: self.FILE_OPTION_CACHE_RESULT_SIZE])
         self.option_cache.move_to_end(query)
         while len(self.option_cache) > self.FILE_OPTION_CACHE_SIZE:
             self.option_cache.popitem(last=False)
 
-    def fetch_file_options(
-        self, query: str, use_path_scheme: bool = True
-    ) -> list[str] | None:
+    def fetch_file_options(self, query: str, use_path_scheme: bool = True) -> list[str] | None:
         fd_args = ['fd', '-apu', '-tf', '-E', '/nix', '-E', '/sys', '.', '/']
         fzf_args = ['fzf', '-f', query]
         if use_path_scheme:
@@ -609,11 +492,7 @@ class SensaiApp(App):
                     command_stdout.channel.close()
         except OSError, TimeoutError:
             return None
-        if (
-            use_path_scheme
-            and not options
-            and ('unknown option' in stderr or 'invalid option' in stderr)
-        ):
+        if use_path_scheme and not options and ('unknown option' in stderr or 'invalid option' in stderr):
             return self.fetch_file_options(query, use_path_scheme=False)
         return options
 
@@ -624,9 +503,7 @@ class SensaiApp(App):
 
         self.cache_file_options(query, options)
         input_box = self.query_one(Input)
-        current_query = self.get_file_query_at_cursor(
-            input_box.value, input_box.cursor_position
-        )
+        current_query = self.get_file_query_at_cursor(input_box.value, input_box.cursor_position)
         if current_query != query:
             return
 
@@ -657,9 +534,7 @@ class SensaiApp(App):
 
     def on_input_changed(self, event: Input.Changed):
         self.cancel_option_update_timer()
-        self.option_update_timer = self.set_timer(
-            self.OPTION_UPDATE_DELAY, self.update_option_list
-        )
+        self.option_update_timer = self.set_timer(self.OPTION_UPDATE_DELAY, self.update_option_list)
 
     def select_option(self):
         input_box = self.query_one(Input)
@@ -670,9 +545,7 @@ class SensaiApp(App):
             input_box.action_end()
         else:
             if ' ' in input_box.value[: input_box.cursor_position]:
-                left_index = (
-                    input_box.value[: input_box.cursor_position].rindex(' ') + 1
-                )
+                left_index = input_box.value[: input_box.cursor_position].rindex(' ') + 1
             else:
                 left_index = 0
 
@@ -681,20 +554,14 @@ class SensaiApp(App):
             else:
                 right_index = len(input_box.value)
 
-            input_box.value = (
-                input_box.value[:left_index]
-                + f'@{self.user_message}'
-                + input_box.value[right_index:]
-            )
+            input_box.value = input_box.value[:left_index] + f'@{self.user_message}' + input_box.value[right_index:]
             input_box.cursor_position = left_index + len(f'@{self.user_message}')
 
     def on_key(self, event: Key):
         input_box = self.query_one(Input)
         option_list = self.query_one(OptionList)
         if event.key == 'down':
-            if input_box.has_focus and self.command_history_index < len(
-                self.command_history
-            ):
+            if input_box.has_focus and self.command_history_index < len(self.command_history):
                 self.command_history_index += 1
                 if self.command_history_index == len(self.command_history):
                     input_box.value = self.user_message
@@ -702,9 +569,7 @@ class SensaiApp(App):
                     input_box.value = self.command_history[self.command_history_index]
             elif input_box.has_focus and option_list.options:
                 option_list.focus()
-                option_list.highlighted = (
-                    0 if event.key == 'down' else len(option_list.options) - 1
-                )
+                option_list.highlighted = 0 if event.key == 'down' else len(option_list.options) - 1
                 event.stop()
                 event.prevent_default()
         elif event.key == 'up':
@@ -719,11 +584,7 @@ class SensaiApp(App):
                 event.prevent_default()
         elif event.key in ['left', 'right'] and input_box.has_focus:
             self.call_after_refresh(self.update_option_list)
-        elif (
-            event.key == 'tab'
-            and option_list.has_focus
-            and option_list.highlighted_option
-        ):
+        elif event.key == 'tab' and option_list.has_focus and option_list.highlighted_option:
             self.user_message = str(option_list.highlighted_option.prompt)
             self.call_after_refresh(self.select_option)
             event.stop()
@@ -747,13 +608,8 @@ def run_simple(base_url: str, session_cookie: str, timeout: float | None):
     with Session() as session:
         session.cookies.set_cookie(create_cookie('session', session_cookie))
         session.get(base_url + '/sensai/')
-        with (
-            SimpleClient(http_session=session) as sio,
-            get_remote_client() as remote_client,
-        ):
-            sio.connect(
-                base_url, transports=['websocket'], socketio_path='sensai/socket.io'
-            )
+        with SimpleClient(http_session=session) as sio, get_remote_client() as remote_client:
+            sio.connect(base_url, transports=['websocket'], socketio_path='sensai/socket.io')
             rprint(RichMarkdown(WELCOME_BANNER + INSTRUCTIONS))
             terminal_context, file_context = '', ''
 
@@ -777,18 +633,9 @@ def run_simple(base_url: str, session_cookie: str, timeout: float | None):
 
                 elif user_message.startswith('!'):
                     command_in = user_message[1:]
-                    result = run_cmd(
-                        command_in,
-                        capture_output=True,
-                        pty=False,
-                        max_output_bytes=MAX_COMMAND_CONTEXT_BYTES + 1,
-                    )
+                    result = run_cmd(command_in, capture_output=True, pty=False, max_output_bytes=MAX_COMMAND_CONTEXT_BYTES + 1)
                     command_context = format_command_context(command_in, result)
-                    rprint(
-                        RichMarkdown(
-                            f'**Command output:**\n```\n{command_context}\n```'
-                        )
-                    )
+                    rprint(RichMarkdown(f'**Command output:**\n```\n{command_context}\n```'))
                     terminal_context = append_context(terminal_context, command_context)
                     if result.returncode == 0:
                         success('Added command input and output to terminal context.')
@@ -798,15 +645,9 @@ def run_simple(base_url: str, session_cookie: str, timeout: float | None):
                 elif user_message.strip():
                     filenames = re.findall(r'@(\S+)', user_message)
                     for filename in filenames:
-                        file_context = append_context(
-                            file_context, format_file_context(remote_client, filename)
-                        )
+                        file_context = append_context(file_context, format_file_context(remote_client, filename))
 
-                    content = {
-                        'message': user_message,
-                        'terminal': terminal_context,
-                        'file': file_context,
-                    }
+                    content = {'message': user_message, 'terminal': terminal_context, 'file': file_context}
                     sio.emit('new_interaction', {'type': 'learner', 'content': content})
                     terminal_context, file_context = '', ''
                     info('Waiting for SensAI response...')
@@ -823,21 +664,9 @@ def run_simple(base_url: str, session_cookie: str, timeout: float | None):
                         success('SensAI response:')
                         rprint(RichMarkdown(event[1]['content']['message']))
                     elif event[0] == 'user_rate_limit':
-                        remaining = max(
-                            [
-                                limit['remaining']
-                                for limit in event[1]
-                                if limit['remaining'] is not None
-                            ]
-                            + [0]
-                        )
+                        remaining = max([limit['remaining'] for limit in event[1] if limit['remaining'] is not None] + [0])
                         fail('SensAI response:')
-                        rprint(
-                            RichMarkdown(
-                                f'User rate limit: Please wait {remaining} '
-                                'seconds before sending your message.'
-                            )
-                        )
+                        rprint(RichMarkdown(f'User rate limit: Please wait {remaining} seconds before sending your message.'))
                     else:
                         warn('SensAI response:')
                         rprint(RichMarkdown(f'Unknown event: {event}'))

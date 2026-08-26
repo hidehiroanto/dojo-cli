@@ -45,9 +45,7 @@ def fetch_workspace_url(service: str) -> str:
 
     parsed = urlparse(iframe_src)
     hostname = parsed.hostname or ''
-    trusted_host = hostname == 'workspace.pwn.college' or hostname.endswith(
-        '-workspace.pwn.college'
-    )
+    trusted_host = hostname == 'workspace.pwn.college' or hostname.endswith('-workspace.pwn.college')
 
     if parsed.scheme != 'https' or not trusted_host:
         error('Workspace API returned an untrusted capability URL.')
@@ -67,21 +65,12 @@ def open_workspace(service: str) -> None:
     terminal_browser = require_executable(
         'terminal-browser',
         [XDG_BIN_HOME / 'terminal-browser'],
-        installer=install_terminal_browser
-        if UNAME_SYSTEM in ['Darwin', 'Linux']
-        else None,
+        installer=install_terminal_browser if UNAME_SYSTEM in ['Darwin', 'Linux'] else None,
         method='the official installer',
     )
 
     completed = subprocess.run(
-        [
-            terminal_browser,
-            'open',
-            fetch_workspace_url(service),
-            '--no-shortcuts',
-            '--allow-clipboard-read',
-        ],
-        check=False,
+        [terminal_browser, 'open', fetch_workspace_url(service), '--no-shortcuts', '--allow-clipboard-read'], check=False
     )
 
     if completed.returncode:

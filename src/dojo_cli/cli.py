@@ -125,9 +125,7 @@ def whois(*, username: Annotated[str | None, Parameter(alias='-u')] = None):
 
 
 @app.command(group=user_info)
-def activity(
-    *, user_id: Annotated[int | None, Parameter(name='--id', alias='-i')] = None
-):
+def activity(*, user_id: Annotated[int | None, Parameter(name='--id', alias='-i')] = None):
     """
     Show activity for another user. If no user ID is given, show the current
     user's activity.
@@ -196,9 +194,7 @@ def ls(
     *,
     dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
     module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[
-        str | None, Parameter(name='--challenge', alias='-c')
-    ] = None,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None,
     auth: Annotated[bool, Parameter(alias='-a')] = False,
     official: Annotated[bool, Parameter(alias='-o')] = False,
     simple: Annotated[bool, Parameter(alias='-s')] = False,
@@ -229,9 +225,7 @@ def tree(
     *,
     dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
     module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[
-        str | None, Parameter(name='--challenge', alias='-c')
-    ] = None,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None,
     auth: Annotated[bool, Parameter(alias='-a', group=tree_access)] = False,
     public: Annotated[bool, Parameter(group=tree_access)] = False,
     official: Annotated[bool, Parameter(alias='-o')] = False,
@@ -251,15 +245,7 @@ def tree(
     """
     from .tree import init_tree
 
-    init_tree(
-        path,
-        dojo_id,
-        module_id,
-        challenge_id,
-        auth=auth,
-        public=public,
-        official=official,
-    )
+    init_tree(path, dojo_id, module_id, challenge_id, auth=auth, public=public, official=official)
 
 
 video_playback = Group.create_ordered('Video Streaming and Playback')
@@ -312,15 +298,9 @@ def start(
     *,
     dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
     module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[
-        str | None, Parameter(name='--challenge', alias='-c')
-    ] = None,
-    standard: Annotated[
-        bool, Parameter(alias=('--normal', '-s', '-n'), group=challenge_mode)
-    ] = False,
-    privileged: Annotated[
-        bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)
-    ] = False,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None,
+    standard: Annotated[bool, Parameter(alias=('--normal', '-s', '-n'), group=challenge_mode)] = False,
+    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)] = False,
 ):
     """
     Start a new challenge. The challenge ID can either be by itself or in the
@@ -349,12 +329,8 @@ def start(
 @app.command(name='next', group=challenge_launch)
 def start_next(
     *,
-    standard: Annotated[
-        bool, Parameter(alias=('--normal', '-s', '-n'), group=challenge_mode)
-    ] = False,
-    privileged: Annotated[
-        bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)
-    ] = False,
+    standard: Annotated[bool, Parameter(alias=('--normal', '-s', '-n'), group=challenge_mode)] = False,
+    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)] = False,
 ):
     """
     Start the next challenge in the current module.
@@ -371,12 +347,8 @@ def start_next(
 @app.command(alias='prev', group=challenge_launch)
 def previous(
     *,
-    standard: Annotated[
-        bool, Parameter(alias=('--normal', '-s', '-n'), group=challenge_mode)
-    ] = False,
-    privileged: Annotated[
-        bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)
-    ] = False,
+    standard: Annotated[bool, Parameter(alias=('--normal', '-s', '-n'), group=challenge_mode)] = False,
+    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)] = False,
 ):
     """
     Start the previous challenge in the current module.
@@ -393,12 +365,8 @@ def previous(
 @app.command(group=challenge_launch)
 def restart(
     *,
-    standard: Annotated[
-        bool, Parameter(alias=('--normal', '-s', '-n'), group=challenge_mode)
-    ] = False,
-    privileged: Annotated[
-        bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)
-    ] = False,
+    standard: Annotated[bool, Parameter(alias=('--normal', '-s', '-n'), group=challenge_mode)] = False,
+    privileged: Annotated[bool, Parameter(alias=('--practice', '-p'), group=challenge_mode)] = False,
 ):
     """
     Restart the current challenge. This will restart in the current mode by default.
@@ -477,9 +445,7 @@ def fish(
 def nu(
     *,
     commands: Annotated[str | None, Parameter(alias='-c')] = None,
-    exec_commands: Annotated[
-        str | None, Parameter(name='--execute', alias='-e')
-    ] = None,
+    exec_commands: Annotated[str | None, Parameter(name='--execute', alias='-e')] = None,
 ):
     """
     Connect to the current challenge via a nushell login shell.
@@ -553,10 +519,7 @@ def du(
     """
     from .remote import run_cmd
 
-    run_cmd(
-        f'find {path or "~"} -type f -exec du -hs {{}} + 2>/dev/null '
-        f'| sort -hr | head -n {count}'
-    )
+    run_cmd(f'find {path or "~"} -type f -exec du -hs {{}} + 2>/dev/null | sort -hr | head -n {count}')
 
 
 @app.command(group=remote_execution)
@@ -642,15 +605,9 @@ remote_mount = Group.create_ordered('Remote Mounting')
 @app.command(group=remote_mount)
 def mount(
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
-    implementation: Annotated[
-        Literal['sshfs', 'mfusepy'] | None, Parameter(alias='-i')
-    ] = None,
-    provider: Annotated[
-        Literal['auto', 'fuse-t', 'macfuse'] | None, Parameter(alias='-P')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
+    implementation: Annotated[Literal['sshfs', 'mfusepy'] | None, Parameter(alias='-i')] = None,
+    provider: Annotated[Literal['auto', 'fuse-t', 'macfuse'] | None, Parameter(alias='-P')] = None,
 ):
     """
     Mount the configured remote project path locally onto the specified mount point.
@@ -672,9 +629,7 @@ def mount(
 @app.command(alias='umount', group=remote_mount)
 def unmount(
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
     force: Annotated[bool, Parameter(alias='-f')] = False,
 ):
     """
@@ -700,15 +655,9 @@ def edit(
     /,
     *,
     editor: Annotated[str | None, Parameter(alias='-e')] = None,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
-    implementation: Annotated[
-        Literal['sshfs', 'mfusepy'] | None, Parameter(alias='-i')
-    ] = None,
-    provider: Annotated[
-        Literal['auto', 'fuse-t', 'macfuse'] | None, Parameter(alias='-P')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
+    implementation: Annotated[Literal['sshfs', 'mfusepy'] | None, Parameter(alias='-i')] = None,
+    provider: Annotated[Literal['auto', 'fuse-t', 'macfuse'] | None, Parameter(alias='-P')] = None,
 ):
     """
     Mount the current challenge locally onto the given mount point, and open
@@ -759,9 +708,7 @@ def antigravity(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in Google Antigravity IDE.
@@ -780,9 +727,7 @@ def codeedit(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in CodeEdit.
@@ -802,9 +747,7 @@ def cursor(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in Cursor.
@@ -823,9 +766,7 @@ def devin(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in Devin Desktop.
@@ -857,9 +798,7 @@ def helix(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in Helix.
@@ -874,14 +813,7 @@ def helix(
 
 
 @app.command(alias='kak', group=remote_edit)
-def kakoune(
-    path: Path,
-    /,
-    *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
-):
+def kakoune(path: Path, /, *, mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None):
     """
     Mount the current challenge locally and open a mounted file in Kakoune.
 
@@ -899,9 +831,7 @@ def lapce(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in Lapce.
@@ -916,14 +846,7 @@ def lapce(
 
 
 @app.command(group=remote_edit)
-def micro(
-    path: Path,
-    /,
-    *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
-):
+def micro(path: Path, /, *, mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None):
     """
     Mount the current challenge locally and open a mounted file in Micro.
 
@@ -967,9 +890,7 @@ def pycharm(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in PyCharm.
@@ -988,9 +909,7 @@ def sublime(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in Sublime Text.
@@ -1009,9 +928,7 @@ def textmate(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in TextMate.
@@ -1030,9 +947,7 @@ def theia(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in Eclipse Theia.
@@ -1065,9 +980,7 @@ def vscode(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in Visual Studio Code.
@@ -1086,9 +999,7 @@ def vscodium(
     path: Path | None = None,
     /,
     *,
-    mount_point: Annotated[
-        ResolvedDirectory | None, Parameter(name='--point', alias='-p')
-    ] = None,
+    mount_point: Annotated[ResolvedDirectory | None, Parameter(name='--point', alias='-p')] = None,
 ):
     """
     Mount the current challenge locally and open it in VSCodium.
@@ -1106,9 +1017,7 @@ def vscodium(
 def zed(
     *,
     install: Annotated[bool, Parameter(alias='-i')] = False,
-    use_lang_servers: Annotated[
-        bool, Parameter(name='--lang-server', alias='-l')
-    ] = False,
+    use_lang_servers: Annotated[bool, Parameter(name='--lang-server', alias='-l')] = False,
     use_mount: Annotated[bool, Parameter(name='--mount', alias='-m')] = False,
 ):
     """
@@ -1165,9 +1074,7 @@ def hint(
     *,
     dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
     module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[
-        str | None, Parameter(name='--challenge', alias='-c')
-    ] = None,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None,
 ):
     """
     Show a hint for a challenge's flag.
@@ -1213,9 +1120,7 @@ def solve(
     flag: Annotated[str | None, Parameter(alias='-f')] = None,
     dojo_id: Annotated[str | None, Parameter(name='--dojo', alias='-d')] = None,
     module_id: Annotated[str | None, Parameter(name='--module', alias='-m')] = None,
-    challenge_id: Annotated[
-        str | None, Parameter(name='--challenge', alias='-c')
-    ] = None,
+    challenge_id: Annotated[str | None, Parameter(name='--challenge', alias='-c')] = None,
 ):
     """
     Submit a flag for a challenge. Warns if flag is for wrong user or challenge.
@@ -1238,9 +1143,7 @@ cli_config = Group.create_ordered('CLI Configuration')
 
 
 @app.command(group=cli_config)
-def config(
-    *, show_default: Annotated[bool, Parameter(name='--default', alias='-d')] = False
-):
+def config(*, show_default: Annotated[bool, Parameter(name='--default', alias='-d')] = False):
     """
     Show the current configuration settings.
 

@@ -1,7 +1,6 @@
 """Handles installing, updating, and launching Zed."""
 
 import gzip
-import json
 import os
 import re
 import secrets
@@ -30,32 +29,25 @@ from .install import (
     wax_install,
     zerobrew_install,
 )
-from .jsonc import (
-    JsoncEditError,
-    append_array_items,
-    append_array_values,
-    get_path_value,
-)
+from .jsonc import JsoncEditError, append_array_items, append_array_values, get_path_value
 from .log import error, info, success, warn
 from .remote import run_cmd, upload_file
 
 HOME_DIR_MAX_SIZE = 1_000_000_000
-MAX_METADATA_BYTES = 0x400000
 MAX_RELEASE_ARCHIVE_BYTES = 0x8000000
 MAX_RELEASE_BINARY_BYTES = 0x10000000
 
 ZED_DOCS_URL = 'https://zed.dev/docs/remote-development'
 ZED_INSTALL_URL = 'https://zed.dev/install.sh'
-ZED_RELEASES_URL = 'https://api.github.com/repos/zed-industries/zed/releases'
+ZED_RELEASE_DOWNLOAD_URL = 'https://github.com/zed-industries/zed/releases/download'
 ZED_SETTINGS_PATH = XDG_CONFIG_HOME.expanduser() / 'zed' / 'settings.json'
 
-RUFF_LATEST_URL = 'https://api.github.com/repos/astral-sh/ruff/releases/latest'
-TY_LATEST_URL = 'https://api.github.com/repos/astral-sh/ty/releases/latest'
-
-ARCHITECTURES = {
-    'x86_64': ('x86_64', 'x86_64-unknown-linux-gnu'),
-    'amd64': ('x86_64', 'x86_64-unknown-linux-gnu'),
+LANG_SERVER_RELEASE_URLS = {
+    'ruff': 'https://github.com/astral-sh/ruff/releases/download',
+    'ty': 'https://github.com/astral-sh/ty/releases/download',
 }
+
+ARCHITECTURES = {'x86_64': ('x86_64', 'x86_64-unknown-linux-gnu'), 'amd64': ('x86_64', 'x86_64-unknown-linux-gnu')}
 
 
 def get_remote_architecture() -> tuple[str, str]:
@@ -145,23 +137,32 @@ def require_zed_cli() -> Path:
         [XDG_BIN_HOME / 'zed'],
         display_name='Zed',
         installer=install_zed if UNAME_SYSTEM in ['Darwin', 'Linux'] else None,
-        method=configured_package_manager()
-        if UNAME_SYSTEM in ['Darwin', 'Linux']
-        else None,
+        method=configured_package_manager() if UNAME_SYSTEM in ['Darwin', 'Linux'] else None,
     )
+
+
+def get_local_tool_version(tool: str) -> str:
+    """Return an installed tool version, prompting to install when missing."""
+    executable = require_executable(
+        tool, [XDG_BIN_HOME / tool], installer=lambda: install_lang_servers([tool]), method=configured_package_manager()
+    )
+    completed = subprocess.run([executable, '--version'], check=False, capture_output=True, text=True)
+    fields = completed.stdout.strip().split()
+    if (
+        completed.returncode
+        or len(fields) < 2
+        or fields[0] != tool
+        or not re.fullmatch(r'\d+(?:\.\d+)+(?:[-+][A-Za-z0-9.-]+)?', fields[1])
+    ):
+        error(f'Could not determine the installed {tool} version.')
+    return fields[1]
 
 
 def save_zed_settings(source: str):
     """Atomically replace Zed settings while preserving its file mode."""
     ZED_SETTINGS_PATH.parent.mkdir(0o755, True, True)
-    mode = (
-        ZED_SETTINGS_PATH.stat().st_mode & 0o777
-        if ZED_SETTINGS_PATH.exists()
-        else 0o600
-    )
-    with tempfile.NamedTemporaryFile(
-        'w', dir=ZED_SETTINGS_PATH.parent, delete=False, encoding='utf-8'
-    ) as temp_file:
+    mode = ZED_SETTINGS_PATH.stat().st_mode & 0o777 if ZED_SETTINGS_PATH.exists() else 0o600
+    with tempfile.NamedTemporaryFile('w', dir=ZED_SETTINGS_PATH.parent, delete=False, encoding='utf-8') as temp_file:
         temp_file.write(source)
         temporary = Path(temp_file.name)
     try:
@@ -174,22 +175,11 @@ def save_zed_settings(source: str):
 def check_lang_server_settings(lang_servers: list[str]):
     source = load_zed_settings()
     try:
-        updated = append_array_values(
-            source, ('languages', 'Python', 'language_servers'), lang_servers
-        )
+        updated = append_array_values(source, ('languages', 'Python', 'language_servers'), lang_servers)
     except JsoncEditError as exc:
         error(f'Could not update Zed settings: {exc}')
     if updated != source:
         save_zed_settings(updated)
-
-
-def fetch_json(url: str, description: str) -> object:
-    """Fetch bounded JSON metadata with checked transport and parsing."""
-    data = download_bytes(url, description, MAX_METADATA_BYTES)
-    try:
-        return json.loads(data)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        error(f'Could not parse {description}: {exc}')
 
 
 def download_bytes(url: str, description: str, limit: int) -> bytes:
@@ -206,27 +196,10 @@ def download_bytes(url: str, description: str, limit: int) -> bytes:
         response.close()
 
 
-def find_asset(release: object, name: str, description: str) -> str:
-    """Return the URL for a named release asset."""
-    if not isinstance(release, dict) or not isinstance(release.get('assets'), list):
-        error(f'{description} metadata does not contain an asset list.')
-    for asset in release['assets']:
-        if not isinstance(asset, dict):
-            continue
-        url = asset.get('browser_download_url')
-        if isinstance(url, str) and name in url:
-            return url
-    error(f'Could not find the {name} asset in {description}.')
-
-
 def upload_zed_server():
     client = get_remote_client()
     echo_result = run_cmd('echo $HOME', capture_output=True, pty=False)
-    echo_query = (
-        echo_result.stdout
-        if echo_result.returncode == 0 and echo_result.stdout
-        else b'/home/hacker'
-    )
+    echo_query = echo_result.stdout if echo_result.returncode == 0 and echo_result.stdout else b'/home/hacker'
     home_dir = Path(echo_query.strip().decode())
     zed_arch, _ = get_remote_architecture()
     zed_server_dir = home_dir / '.zed_server'
@@ -241,33 +214,19 @@ def upload_zed_server():
         elif UNAME_SYSTEM == 'Linux':
             zed_app = zed_cli.parent.parent / 'libexec' / 'zed-editor'
     elif UNAME_SYSTEM == 'Windows':
-        error(
-            'Windows is not yet supported. Consult the relevant '
-            f'[link={ZED_DOCS_URL}]documentation[/] to upload the server.'
-        )
+        error(f'Windows is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
     else:
-        error(
-            'Your OS is not yet supported. Consult the relevant '
-            f'[link={ZED_DOCS_URL}]documentation[/] to upload the server.'
-        )
+        error(f'Your OS is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
 
     if not zed_app.is_file():
         confirm_install('Zed', configured_package_manager())
         install_zed()
         zed_cli = require_zed_cli().resolve()
-        zed_app = (
-            zed_cli.parent / 'zed'
-            if UNAME_SYSTEM == 'Darwin'
-            else zed_cli.parent.parent / 'libexec' / 'zed-editor'
-        )
+        zed_app = zed_cli.parent / 'zed' if UNAME_SYSTEM == 'Darwin' else zed_cli.parent.parent / 'libexec' / 'zed-editor'
         if not zed_app.is_file():
             error('Zed is still missing after installation.')
-    zed_system_specs = subprocess.run(
-        [str(zed_app), '--system-specs'], check=True, capture_output=True
-    ).stdout
-    version_match = re.search(
-        rb'^Zed:\s+(v\d+\.\d+\.\d+(?:[-+][^\s]+)?)', zed_system_specs, re.MULTILINE
-    )
+    zed_system_specs = subprocess.run([str(zed_app), '--system-specs'], check=True, capture_output=True).stdout
+    version_match = re.search(rb'^Zed:\s+(v\d+\.\d+\.\d+(?:[-+][^\s]+)?)', zed_system_specs, re.MULTILINE)
     if version_match is None:
         error('Could not determine the installed Zed version.')
     zed_semver = version_match.group(1).decode()
@@ -280,26 +239,9 @@ def upload_zed_server():
         info('Updating zed-remote-server...')
 
         zed_version = zed_semver.split('+')[0]
-        zed_releases = fetch_json(ZED_RELEASES_URL, 'Zed release metadata')
-        if not isinstance(zed_releases, list):
-            error('Zed release metadata must contain a list.')
-        zed_release = next(
-            (
-                release
-                for release in zed_releases
-                if isinstance(release, dict) and release.get('tag_name') == zed_version
-            ),
-            None,
-        )
-        if zed_release is None:
-            error(f'Could not find Zed release {zed_version}.')
         zed_asset_name = f'zed-remote-server-linux-{zed_arch}'
-        zed_asset_url = find_asset(
-            zed_release, zed_asset_name, f'Zed release {zed_version}'
-        )
-        zed_archive = download_bytes(
-            zed_asset_url, zed_asset_name, MAX_RELEASE_ARCHIVE_BYTES
-        )
+        zed_asset_url = f'{ZED_RELEASE_DOWNLOAD_URL}/{zed_version}/{zed_asset_name}.gz'
+        zed_archive = download_bytes(zed_asset_url, zed_asset_name, MAX_RELEASE_ARCHIVE_BYTES)
         try:
             with gzip.GzipFile(fileobj=BytesIO(zed_archive)) as compressed:
                 zed_server_data = compressed.read(MAX_RELEASE_BINARY_BYTES + 1)
@@ -309,15 +251,9 @@ def upload_zed_server():
             error(f'The decompressed {zed_asset_name} has an invalid size.')
 
         # Check if enough disk space is available
-        du_result = run_cmd(
-            f'du -bs {home_dir} 2>/dev/null', capture_output=True, pty=False
-        )
-        du_query = (
-            du_result.stdout if du_result.returncode == 0 and du_result.stdout else b'0'
-        )
-        if len(zed_server_data) - client.getsize(
-            str(zed_server_dir)
-        ) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
+        du_result = run_cmd(f'du -bs {home_dir} 2>/dev/null', capture_output=True, pty=False)
+        du_query = du_result.stdout if du_result.returncode == 0 and du_result.stdout else b'0'
+        if len(zed_server_data) - client.getsize(str(zed_server_dir)) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
             error('Not enough disk space to update zed-remote-server')
 
         upload_remote_binary(client, zed_server_data, zed_server_dir / zed_server)
@@ -328,45 +264,29 @@ def upload_zed_server():
         success(f'Updated zed-remote-server to version [b cyan]{zed_semver}[/]')
 
 
-def upload_lang_server(lang_server: str, arch: str, latest_url: str):
+def upload_lang_server(lang_server: str, arch: str, version: str):
     client = get_remote_client()
     echo_result = run_cmd('echo $HOME', capture_output=True, pty=False)
-    echo_query = (
-        echo_result.stdout
-        if echo_result.returncode == 0 and echo_result.stdout
-        else b'/home/hacker'
-    )
+    echo_query = echo_result.stdout if echo_result.returncode == 0 and echo_result.stdout else b'/home/hacker'
     home_dir = Path(echo_query.strip().decode())
     lang_dir = home_dir / '.local' / 'share' / 'zed' / 'languages'
     client.makedirs(str(lang_dir / lang_server))
     old_versions = client.listdir(str(lang_dir / lang_server))
-    latest = fetch_json(latest_url, f'{lang_server} release metadata')
-    if not isinstance(latest, dict) or not isinstance(latest.get('name'), str):
-        error(f'{lang_server} release metadata is missing a release name.')
-    latest_name = latest['name']
 
     info(f'Installed versions of {lang_server}: {old_versions}')
-    info(f'Latest version of {lang_server}: [b cyan]{latest_name}[/]')
+    info(f'Installed local version of {lang_server}: [b cyan]{version}[/]')
 
-    if f'{lang_server}-{latest_name}' not in old_versions:
+    if f'{lang_server}-{version}' not in old_versions:
         info(f'Updating {lang_server}...')
 
-        lang_server_dir = lang_dir / lang_server / f'{lang_server}-{latest_name}' / arch
-        asset_url = find_asset(latest, arch, f'{lang_server} release')
-        targz = download_bytes(
-            asset_url, f'{lang_server} release archive', MAX_RELEASE_ARCHIVE_BYTES
-        )
+        lang_server_dir = lang_dir / lang_server / f'{lang_server}-{version}' / arch
+        asset_url = f'{LANG_SERVER_RELEASE_URLS[lang_server]}/{version}/{arch}.tar.gz'
+        targz = download_bytes(asset_url, f'{lang_server} release archive', MAX_RELEASE_ARCHIVE_BYTES)
         try:
             with tarfile.open(fileobj=BytesIO(targz), mode='r:gz') as tar:
                 member = tar.getmember(f'{arch}/{lang_server}')
-                if (
-                    not member.isfile()
-                    or member.size <= 0
-                    or member.size > MAX_RELEASE_BINARY_BYTES
-                ):
-                    error(
-                        f'The {lang_server} archive member has an invalid size or type.'
-                    )
+                if not member.isfile() or member.size <= 0 or member.size > MAX_RELEASE_BINARY_BYTES:
+                    error(f'The {lang_server} archive member has an invalid size or type.')
                 tar_member = tar.extractfile(member)
                 lang_server_data = tar_member.read() if tar_member else b''
         except (KeyError, OSError, tarfile.TarError) as exc:
@@ -375,23 +295,17 @@ def upload_lang_server(lang_server: str, arch: str, latest_url: str):
             error(f'The extracted {lang_server} binary has an invalid size.')
 
         # Check if enough disk space is available
-        du_result = run_cmd(
-            f'du -bs {home_dir} 2>/dev/null', capture_output=True, pty=False
-        )
-        du_query = (
-            du_result.stdout if du_result.returncode == 0 and du_result.stdout else b'0'
-        )
-        if len(lang_server_data) - client.getsize(
-            str(lang_dir / lang_server)
-        ) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
+        du_result = run_cmd(f'du -bs {home_dir} 2>/dev/null', capture_output=True, pty=False)
+        du_query = du_result.stdout if du_result.returncode == 0 and du_result.stdout else b'0'
+        if len(lang_server_data) - client.getsize(str(lang_dir / lang_server)) > HOME_DIR_MAX_SIZE - int(du_query.split()[0]):
             error('Not enough disk space to update language server')
 
         upload_remote_binary(client, lang_server_data, lang_server_dir / lang_server)
 
         for old_version in old_versions:
-            if old_version != f'{lang_server}-{latest_name}':
+            if old_version != f'{lang_server}-{version}':
                 client.remove(str(lang_dir / lang_server / old_version))
-        success(f'Updated {lang_server} to version [b cyan]{latest_name}[/]')
+        success(f'Updated {lang_server} to version [b cyan]{version}[/]')
 
 
 def run_zed():
@@ -400,14 +314,9 @@ def run_zed():
     ssh_identity_file = Path(ssh_config['IdentityFile']).expanduser().resolve()
 
     zed_cli = require_zed_cli()
-    if (
-        ssh_config_file.is_file()
-        and f'Host {ssh_config["Host"]}' in ssh_config_file.read_text()
-    ):
+    if ssh_config_file.is_file() and f'Host {ssh_config["Host"]}' in ssh_config_file.read_text():
         zed_args = [zed_cli, f'ssh://{ssh_config["Host"]}{ssh_config["project_path"]}']
-    elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith(
-        '-----BEGIN OPENSSH PRIVATE KEY-----'
-    ):
+    elif ssh_identity_file.is_file() and ssh_identity_file.read_text().startswith('-----BEGIN OPENSSH PRIVATE KEY-----'):
         source = load_zed_settings()
         try:
             ssh_connections = get_path_value(source, ('ssh_connections',))
@@ -415,13 +324,10 @@ def run_zed():
             ssh_connections = []
         except JsoncEditError as exc:
             error(f'Could not parse Zed settings: {exc}')
-        if not isinstance(ssh_connections, list) or any(
-            not isinstance(connection, dict) for connection in ssh_connections
-        ):
+        if not isinstance(ssh_connections, list) or any(not isinstance(connection, dict) for connection in ssh_connections):
             error('Zed ssh_connections must be an array of objects.')
         if all(
-            connection.get('nickname') != ssh_config['Host']
-            and connection.get('host') != ssh_config['HostName']
+            connection.get('nickname') != ssh_config['Host'] and connection.get('host') != ssh_config['HostName']
             for connection in ssh_connections
         ):
             connection = {
@@ -451,10 +357,7 @@ def run_zed():
             f'ssh://{ssh_config["User"]}@{ssh_config["HostName"]}:{ssh_config["Port"]}{ssh_config["project_path"]}',
         ]
     else:
-        error(
-            'Something went wrong with the SSH config file or the SSH key. '
-            'Please make sure at least one is valid.'
-        )
+        error('Something went wrong with the SSH config file or the SSH key. Please make sure at least one is valid.')
 
     completed = subprocess.run([str(arg) for arg in zed_args], check=False)
     if completed.returncode:
@@ -481,20 +384,14 @@ def init_zed(install: bool = False, use_lang_servers: bool = False):
     if UNAME_SYSTEM in ['Darwin', 'Linux']:
         upload_zed_server()
     elif UNAME_SYSTEM == 'Windows':
-        warn(
-            'Windows is not yet supported. Consult the relevant '
-            f'[link={ZED_DOCS_URL}]documentation[/] to upload the server.'
-        )
+        warn(f'Windows is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
     else:
-        warn(
-            'Your OS is not yet supported. Consult the relevant '
-            f'[link={ZED_DOCS_URL}]documentation[/] to upload the server.'
-        )
+        warn(f'Your OS is not yet supported. Consult the relevant [link={ZED_DOCS_URL}]documentation[/] to upload the server.')
 
     if use_lang_servers:
         _, tool_arch = get_remote_architecture()
         check_lang_server_settings(lang_servers)
-        upload_lang_server('ruff', f'ruff-{tool_arch}', RUFF_LATEST_URL)
-        upload_lang_server('ty', f'ty-{tool_arch}', TY_LATEST_URL)
+        for lang_server in lang_servers:
+            upload_lang_server(lang_server, f'{lang_server}-{tool_arch}', get_local_tool_version(lang_server))
 
     run_zed()

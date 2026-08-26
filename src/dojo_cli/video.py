@@ -7,11 +7,7 @@ import yt_dlp
 
 from .constants import UNAME_SYSTEM, XDG_BIN_HOME
 from .http import request
-from .install import (
-    configured_package_manager,
-    package_manager_install,
-    require_executable,
-)
+from .install import configured_package_manager, package_manager_install, require_executable
 from .log import error
 from .utils import can_render_image, download_image, paginate, require_item, show_table
 
@@ -66,15 +62,9 @@ def play_twitch(channel: str):
 
 
 def play_youtube(video_id: str, playlist_id: str | None = None):
-    youtube_url = (
-        video_id
-        if video_id.startswith('https://')
-        else f'https://www.youtube.com/watch?v={video_id}'
-    )
+    youtube_url = video_id if video_id.startswith('https://') else f'https://www.youtube.com/watch?v={video_id}'
     if playlist_id:
-        youtube_url += (
-            f'&list={playlist_id}' if '?' in youtube_url else f'?list={playlist_id}'
-        )
+        youtube_url += f'&list={playlist_id}' if '?' in youtube_url else f'?list={playlist_id}'
 
     if UNAME_SYSTEM == 'Darwin':
         iina_cli = require_iina()
@@ -124,23 +114,14 @@ def init_youtube(
                 error(f'The lecture with the ID {resource_id} does not have a video.')
             play_youtube(video, resource.get('playlist'))
         else:
-            error(
-                f'The resource with the ID {resource_id} is not a lecture, '
-                f'it is of type "{resource["type"]}".'
-            )
+            error(f'The resource with the ID {resource_id} is not a lecture, it is of type "{resource["type"]}".')
 
     else:
-        with yt_dlp.YoutubeDL(
-            {'extract_flat': True, 'quiet': True, 'skip_download': True}
-        ) as ydl:
+        with yt_dlp.YoutubeDL({'extract_flat': True, 'quiet': True, 'skip_download': True}) as ydl:
             if playlist_id is not None:
-                feed = ydl.extract_info(
-                    f'https://www.youtube.com/playlist?list={playlist_id}'
-                )['entries']
+                feed = ydl.extract_info(f'https://www.youtube.com/playlist?list={playlist_id}')['entries']
             else:
-                feed = ydl.extract_info('https://www.youtube.com/pwncollege')[
-                    'entries'
-                ][0]['entries']
+                feed = ydl.extract_info('https://www.youtube.com/pwncollege')['entries'][0]['entries']
 
         feed = paginate(feed, page)
 
@@ -149,15 +130,9 @@ def init_youtube(
             row['id'] = f'[b cyan]{row["id"]}[/]'
             row['title'] = f'[b green]{row["title"]}[/]'
             duration = int(row['duration'])
-            row['duration'] = (
-                f'{duration // 3600:02}:{(duration % 3600) // 60:02}:{duration % 60:02}'
-            )
+            row['duration'] = f'{duration // 3600:02}:{(duration % 3600) // 60:02}:{duration % 60:02}'
             if render_image:
                 row['thumbnail'] = download_image(row['thumbnails'][0]['url'], 3)
 
-        table_keys = (
-            ['id', 'thumbnail', 'title', 'url', 'duration']
-            if render_image
-            else ['id', 'title', 'url', 'duration']
-        )
+        table_keys = ['id', 'thumbnail', 'title', 'url', 'duration'] if render_image else ['id', 'title', 'url', 'duration']
         show_table(feed, 'YouTube Feed', table_keys)

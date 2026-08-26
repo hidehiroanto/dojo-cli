@@ -11,13 +11,7 @@ from urllib.parse import urlparse
 import niquests
 
 from .config import load_user_config
-from .constants import (
-    CARGO_HOME,
-    UNAME_MACHINE,
-    UNAME_SYSTEM,
-    XDG_BIN_HOME,
-    XDG_DATA_HOME,
-)
+from .constants import CARGO_HOME, UNAME_MACHINE, UNAME_SYSTEM, XDG_BIN_HOME, XDG_DATA_HOME
 from .http import DEFAULT_HTTP_TIMEOUT
 from .log import error, info, warn
 
@@ -35,13 +29,9 @@ if Path('/opt/zerobrew').is_dir() or UNAME_SYSTEM == 'Darwin':
     ZEROBREW_ROOT = Path('/opt/zerobrew')
 else:
     ZEROBREW_ROOT = XDG_DATA_HOME.expanduser() / 'zerobrew'
-ZEROBREW_PREFIX = (
-    ZEROBREW_ROOT if UNAME_SYSTEM == 'Darwin' else ZEROBREW_ROOT / 'prefix'
-)
+ZEROBREW_PREFIX = ZEROBREW_ROOT if UNAME_SYSTEM == 'Darwin' else ZEROBREW_ROOT / 'prefix'
 
-HOMEBREW_INSTALL_URL = (
-    'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
-)
+HOMEBREW_INSTALL_URL = 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
 NANOBREW_INSTALL_URL = 'https://nanobrew.trilok.ai/install'
 RUSTUP_INSTALL_URL = 'https://sh.rustup.rs'
 SCOOP_INSTALL_URL = 'https://get.scoop.sh'
@@ -69,10 +59,7 @@ def confirm_install(name: str, method: str | None = None):
     """Ask for confirmation before installing a missing program."""
     warn(f'{name} is missing.')
     if not sys.stdin.isatty():
-        error(
-            f'Cannot prompt to install {name} because standard input is not '
-            'interactive.'
-        )
+        error(f'Cannot prompt to install {name} because standard input is not interactive.')
 
     suffix = f' using {method}' if method else ''
     try:
@@ -97,10 +84,7 @@ def read_limited_response(response, limit: int) -> bytes:
 
 
 def run_install_script(
-    name: str,
-    url: str,
-    interpreter: str | Path | list[str | Path] = 'bash',
-    allowed_hosts: Iterable[str] = (),
+    name: str, url: str, interpreter: str | Path | list[str | Path] = 'bash', allowed_hosts: Iterable[str] = ()
 ):
     """Download and execute an official installation script."""
     try:
@@ -114,10 +98,7 @@ def run_install_script(
         original_host = urlparse(url).hostname
         final_host = urlparse(str(response.url)).hostname
         if final_host not in {original_host, *allowed_hosts}:
-            error(
-                f'The {name} installer redirected to an untrusted host: '
-                f'{final_host or "unknown"}.'
-            )
+            error(f'The {name} installer redirected to an untrusted host: {final_host or "unknown"}.')
 
         script_bytes = read_limited_response(response, MAX_INSTALLER_BYTES)
     finally:
@@ -129,11 +110,7 @@ def run_install_script(
     if not script.strip() or '\0' in script:
         error(f'The {name} installer is invalid.')
 
-    command = (
-        [str(part) for part in interpreter]
-        if isinstance(interpreter, list)
-        else [str(interpreter)]
-    )
+    command = [str(part) for part in interpreter] if isinstance(interpreter, list) else [str(interpreter)]
     completed = subprocess.run(command, input=script, text=True, check=False)
     if completed.returncode:
         error(f'The {name} installer exited with code {completed.returncode}.')
@@ -143,10 +120,7 @@ def run_optional_update(name: str, command: list[str]):
     """Run a best-effort update and warn if it fails."""
     completed = subprocess.run(command, check=False)
     if completed.returncode:
-        warn(
-            f'{name} update exited with code {completed.returncode}; '
-            'continuing with the installed version.'
-        )
+        warn(f'{name} update exited with code {completed.returncode}; continuing with the installed version.')
 
 
 def require_executable(
@@ -181,10 +155,7 @@ def configured_package_manager() -> str:
 
 
 def homebrew_install(
-    formulae: list[str] | None = None,
-    casks: list[str] | None = None,
-    taps: list[str] | None = None,
-    skip_update: bool = False,
+    formulae: list[str] | None = None, casks: list[str] | None = None, taps: list[str] | None = None, skip_update: bool = False
 ):
     """Install Homebrew formulae and casks."""
 
@@ -210,10 +181,7 @@ def homebrew_install(
 
 
 def nanobrew_install(
-    formulae: list[str] | None = None,
-    casks: list[str] | None = None,
-    taps: list[str] | None = None,
-    skip_update: bool = False,
+    formulae: list[str] | None = None, casks: list[str] | None = None, taps: list[str] | None = None, skip_update: bool = False
 ):
     """
     Install formulae and casks using Nanobrew.
@@ -236,21 +204,14 @@ def nanobrew_install(
         run_optional_update('Nanobrew', [str(nb), 'update'])
 
     if taps:
-        error(
-            'No need to install taps, just install third-party tap formulae '
-            'e.g. `user/tap/formula` directly'
-        )
+        error('No need to install taps, just install third-party tap formulae e.g. `user/tap/formula` directly')
     if casks:
         subprocess.run([str(nb), 'install', '--cask', *casks], check=True)
     if formulae:
         subprocess.run([str(nb), 'install', *formulae], check=True)
 
 
-def scoop_install(
-    packages: list[str] | None = None,
-    buckets: list[str] | None = None,
-    skip_update: bool = False,
-):
+def scoop_install(packages: list[str] | None = None, buckets: list[str] | None = None, skip_update: bool = False):
     # Requires PowerShell
     # Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
     # Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
@@ -269,17 +230,10 @@ def scoop_install(
         if powershell is None:
             error('PowerShell is required to install Scoop.')
         subprocess.run(
-            [
-                str(powershell),
-                '-NoProfile',
-                '-Command',
-                'Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser',
-            ],
+            [str(powershell), '-NoProfile', '-Command', 'Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser'],
             check=True,
         )
-        run_install_script(
-            'Scoop', SCOOP_INSTALL_URL, [str(powershell), '-NoProfile', '-Command', '-']
-        )
+        run_install_script('Scoop', SCOOP_INSTALL_URL, [str(powershell), '-NoProfile', '-Command', '-'])
         scoop = find_executable('scoop')
         if scoop is None:
             error('Scoop is still missing after installation.')
@@ -321,17 +275,7 @@ def uv_install(
 
     if global_packages:
         subprocess.run(
-            [
-                str(uv),
-                'pip',
-                'install',
-                '-U',
-                '--break-system-packages',
-                '--strict',
-                '--system',
-                *global_packages,
-            ],
-            check=True,
+            [str(uv), 'pip', 'install', '-U', '--break-system-packages', '--strict', '--system', *global_packages], check=True
         )
     if local_packages:
         subprocess.run([str(uv), 'add', '-U', *local_packages], check=True)
@@ -344,10 +288,7 @@ def uv_install(
 # Installing wax casks may lead to `IO error: Permission denied (os error 13)`
 # Reinstalling ruff or ty with wax may cause `IO error: File exists (os error 17)`
 def wax_install(
-    formulae: list[str] | None = None,
-    casks: list[str] | None = None,
-    taps: list[str] | None = None,
-    skip_update: bool = False,
+    formulae: list[str] | None = None, casks: list[str] | None = None, taps: list[str] | None = None, skip_update: bool = False
 ):
     """
     Install formulae and casks using Wax, a fast, modern Homebrew-compatible
@@ -390,10 +331,7 @@ def wax_install(
 
 
 def zerobrew_install(
-    formulae: list[str] | None = None,
-    casks: list[str] | None = None,
-    taps: list[str] | None = None,
-    skip_update: bool = False,
+    formulae: list[str] | None = None, casks: list[str] | None = None, taps: list[str] | None = None, skip_update: bool = False
 ):
     """
     Install Homebrew formulae and casks using the Zerobrew package manager.
@@ -408,21 +346,13 @@ def zerobrew_install(
     if zb is None:
         confirm_install('Zerobrew', 'the official installer')
         info('Installing Zerobrew...')
-        run_install_script(
-            'Zerobrew',
-            ZEROBREW_INSTALL_URL,
-            allowed_hosts=['raw.githubusercontent.com'],
-        )
+        run_install_script('Zerobrew', ZEROBREW_INSTALL_URL, allowed_hosts=['raw.githubusercontent.com'])
         zb = find_executable('zb', [zb_fallback])
         if zb is None:
             error('Zerobrew is still missing after installation.')
     elif not skip_update:
         info('Updating Zerobrew...')
-        run_install_script(
-            'Zerobrew',
-            ZEROBREW_INSTALL_URL,
-            allowed_hosts=['raw.githubusercontent.com'],
-        )
+        run_install_script('Zerobrew', ZEROBREW_INSTALL_URL, allowed_hosts=['raw.githubusercontent.com'])
 
     if taps:
         # TODO: replace this when zerobrew supports taps
@@ -430,10 +360,7 @@ def zerobrew_install(
     if casks:
         # Fall back to homebrew for now
         # TODO: replace this when zerobrew supports casks
-        warn(
-            'Zerobrew does not support installing casks yet, falling back to '
-            'Homebrew...'
-        )
+        warn('Zerobrew does not support installing casks yet, falling back to Homebrew...')
         homebrew_install(casks=casks)
     if formulae:
         subprocess.run([str(zb), 'install', *formulae], check=True)

@@ -13,14 +13,7 @@ from .client import get_remote_client
 from .http import request
 from .log import error, fail, info, success, warn
 from .terminal import apply_style
-from .utils import (
-    can_render_image,
-    download_image,
-    fix_markdown_links,
-    get_belt_hex,
-    require_item,
-    show_table,
-)
+from .utils import can_render_image, download_image, fix_markdown_links, get_belt_hex, require_item, show_table
 
 SECTIONS = ['welcome', 'topic', 'public', 'course', 'private', 'hidden', 'example']
 
@@ -33,9 +26,7 @@ def sort_dojos(dojos: list[dict]) -> list[dict]:
         for _, dojo in sorted(
             indexed_dojos,
             key=lambda item: (
-                SECTIONS.index(item[1].get('type'))
-                if item[1].get('type') in SECTIONS
-                else len(SECTIONS),
+                SECTIONS.index(item[1].get('type')) if item[1].get('type') in SECTIONS else len(SECTIONS),
                 item[0],
             ),
         )
@@ -45,14 +36,10 @@ def sort_dojos(dojos: list[dict]) -> list[dict]:
 def validate_dojo_path(parts: list[str], offset: int = 0) -> bool:
     """Return whether path components contain valid dojo identifiers."""
     patterns = (r'[-~\w]+', r'[-\w]+', r'[-\w]+')
-    return all(
-        re.fullmatch(pattern, part) for pattern, part in zip(patterns[offset:], parts)
-    )
+    return all(re.fullmatch(pattern, part) for pattern, part in zip(patterns[offset:], parts))
 
 
-def parse_challenge_path(
-    challenge_id: str, challenge_data: dict | None = None
-) -> tuple:
+def parse_challenge_path(challenge_id: str, challenge_data: dict | None = None) -> tuple:
     absolute = challenge_id.startswith('/')
     parts = challenge_id.strip('/').split('/')
     offset = 3 - len(parts)
@@ -83,10 +70,7 @@ def parse_catalog_path(path: str) -> tuple[str | None, str | None, str | None]:
 
 
 def resolve_catalog_path(
-    path: str | None,
-    dojo_id: str | None,
-    module_id: str | None,
-    challenge_id: str | None,
+    path: str | None, dojo_id: str | None, module_id: str | None, challenge_id: str | None
 ) -> tuple[str | None, str | None, str | None]:
     """Resolve a positional catalog path or component options."""
     if path is None:
@@ -99,9 +83,7 @@ def resolve_catalog_path(
         error(str(exc))
 
 
-def get_challenge_num_id(
-    dojo_id: str | None, module_id: str | None, challenge_id: str | None
-) -> int:
+def get_challenge_num_id(dojo_id: str | None, module_id: str | None, challenge_id: str | None) -> int:
     if dojo_id and module_id and challenge_id:
         response = request(f'/{dojo_id}/{module_id}', False, False)
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -115,11 +97,7 @@ def get_challenge_num_id(
     return -1
 
 
-def get_challenge_info(
-    dojo_id: str | None = None,
-    module_id: str | None = None,
-    challenge_id: str | None = None,
-):
+def get_challenge_info(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None):
     account_id = request('/users/me').json().get('id')
     if account_id is None:
         error('Please login first or run this in the dojo.')
@@ -129,9 +107,7 @@ def get_challenge_info(
     if challenge_id:
         if not dojo_id or not module_id:
             challenge_path = parse_challenge_path(challenge_id, challenge_data)
-            if len(challenge_path) == 3 and all(
-                isinstance(s, str) for s in challenge_path
-            ):
+            if len(challenge_path) == 3 and all(isinstance(s, str) for s in challenge_path):
                 dojo_id, module_id, challenge_id = challenge_path
             else:
                 error('Invalid challenge ID.')
@@ -141,24 +117,15 @@ def get_challenge_info(
             error('Challenge does not exist.')
     else:
         if challenge_data['success']:
-            dojo_id, module_id, challenge_id = (
-                challenge_data['dojo'],
-                challenge_data['module'],
-                challenge_data['challenge'],
-            )
+            dojo_id, module_id, challenge_id = (challenge_data['dojo'], challenge_data['module'], challenge_data['challenge'])
         else:
-            error(
-                'No active challenge session; please start a challenge or '
-                'specify a challenge name!'
-            )
+            error('No active challenge session; please start a challenge or specify a challenge name!')
 
         active_module = request('/active-module', False)
         if active_module.is_redirect:
             challenge_num_id = get_challenge_num_id(dojo_id, module_id, challenge_id)
         else:
-            challenge_num_id = (
-                active_module.json().get('c_current', {}).get('challenge_id', -1)
-            )
+            challenge_num_id = active_module.json().get('c_current', {}).get('challenge_id', -1)
 
     return (dojo_id, module_id, challenge_id), (account_id, challenge_num_id)
 
@@ -202,9 +169,7 @@ def show_list(
     simple: bool = False,
     ids: bool = False,
 ):
-    dojo_id, module_id, challenge_id = resolve_catalog_path(
-        path, dojo_id, module_id, challenge_id
-    )
+    dojo_id, module_id, challenge_id = resolve_catalog_path(path, dojo_id, module_id, challenge_id)
     if not dojo_id:
         dojos = request('/dojos', auth=auth).json().get('dojos')
         sorted_dojos = sort_dojos(dojos)
@@ -236,9 +201,7 @@ def show_list(
                     'id': f'[b cyan]{dojo["id"]}[/]',
                     'award': award,
                     'name': f'[b green]{dojo["name"]}[/]',
-                    'description': Markdown(fix_markdown_links(dojo['description']))
-                    if dojo['description']
-                    else None,
+                    'description': Markdown(fix_markdown_links(dojo['description'])) if dojo['description'] else None,
                     'modules': dojo['modules_count'],
                     'challenges': dojo['challenges_count'],
                 }
@@ -258,9 +221,7 @@ def show_list(
                 {
                     'id': f'[b cyan]{module["id"]}[/]',
                     'name': f'[b green]{module["name"]}[/]',
-                    'description': Markdown(fix_markdown_links(module['description']))
-                    if module['description']
-                    else None,
+                    'description': Markdown(fix_markdown_links(module['description'])) if module['description'] else None,
                 }
             )
 
@@ -279,13 +240,7 @@ def show_list(
             resource_type = item.get('type')
             if item_type == 'resource' and resource_type == 'header':
                 if table_data:
-                    show_table(
-                        table_data,
-                        table_title,
-                        table_keys,
-                        column_overflow='fold',
-                        show_lines=True,
-                    )
+                    show_table(table_data, table_title, table_keys, column_overflow='fold', show_lines=True)
                 table_data = []
                 table_title = item.get('content') or item.get('name') or 'Resources'
                 continue
@@ -299,9 +254,7 @@ def show_list(
                         youtube_url += f'&list={item["playlist"]}'
                     links.append(f'Video: [{youtube_url}]({youtube_url})')
                 if item.get('slides'):
-                    slides_url = (
-                        f'https://docs.google.com/presentation/d/{item["slides"]}/embed'
-                    )
+                    slides_url = f'https://docs.google.com/presentation/d/{item["slides"]}/embed'
                     links.append(f'Slides: [{slides_url}]({slides_url})')
                 content = '\n\n'.join(links)
 
@@ -313,18 +266,10 @@ def show_list(
                     'type': label,
                     'id': f'[b cyan]{item["id"]}[/]' if item.get('id') else None,
                     'name': f'[b green]{item["name"]}[/]' if item.get('name') else None,
-                    'content': Markdown(fix_markdown_links(content))
-                    if content
-                    else None,
+                    'content': Markdown(fix_markdown_links(content)) if content else None,
                 }
             )
-        show_table(
-            table_data,
-            table_title,
-            table_keys,
-            column_overflow='fold',
-            show_lines=True,
-        )
+        show_table(table_data, table_title, table_keys, column_overflow='fold', show_lines=True)
         return
     else:
         modules = request(f'/dojos/{dojo_id}/modules', auth=auth).json().get('modules')
@@ -339,9 +284,7 @@ def show_list(
         table_data['id'] = f'[b cyan]{table_data["id"]}[/]'
         table_data['name'] = f'[b green]{table_data["name"]}[/]'
         table_data['description'] = (
-            Markdown(fix_markdown_links(table_data['description']))
-            if table_data['description']
-            else None
+            Markdown(fix_markdown_links(table_data['description'])) if table_data['description'] else None
         )
 
     show_table(table_data, table_title, table_keys, show_lines=True)
@@ -366,11 +309,7 @@ def init_challenge(
         dojo_id, module_id, challenge_id = challenge_path
     elif not challenge_id:
         if challenge_data['success']:
-            dojo_id, module_id, challenge_id = (
-                challenge_data['dojo'],
-                challenge_data['module'],
-                challenge_data['challenge'],
-            )
+            dojo_id, module_id, challenge_id = (challenge_data['dojo'], challenge_data['module'], challenge_data['challenge'])
         else:
             error('No active challenge session; please specify a challenge ID!')
     elif not dojo_id or not module_id:
@@ -390,12 +329,7 @@ def init_challenge(
     else:
         practice = challenge_data.get('practice', False)
 
-    challenge_data = {
-        'dojo': dojo_id,
-        'module': module_id,
-        'challenge': challenge_id,
-        'practice': practice,
-    }
+    challenge_data = {'dojo': dojo_id, 'module': module_id, 'challenge': challenge_id, 'practice': practice}
     docker_response = request('/docker', csrf=True, json=challenge_data).json()
     if docker_response.get('success'):
         success('Challenge started successfully!')
@@ -471,14 +405,8 @@ def show_status():
         fail(docker_response.get('error'))
 
 
-def show_hint(
-    dojo_id: str | None = None,
-    module_id: str | None = None,
-    challenge_id: str | None = None,
-):
-    (dojo_id, module_id, challenge_id), (account_id, challenge_num_id) = (
-        get_challenge_info(dojo_id, module_id, challenge_id)
-    )
+def show_hint(dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None):
+    (dojo_id, module_id, challenge_id), (account_id, challenge_num_id) = get_challenge_info(dojo_id, module_id, challenge_id)
 
     fake_flag = serialize_flag(account_id, challenge_num_id)
     flag_prefix = 'pwn.college{'
@@ -486,55 +414,28 @@ def show_hint(
     info(f'The flag starts with: [b cyan]{flag_prefix}[/]')
     info(f'The flag ends with: [b cyan]{flag_suffix}[/]')
     flag_chars = ''.join(sorted(string.digits + string.ascii_letters + '-_'))
-    info(
-        f'The middle of the flag can only be these characters: [b cyan]{flag_chars}[/]'
-    )
+    info(f'The middle of the flag can only be these characters: [b cyan]{flag_chars}[/]')
 
     challenge_data = request('/docker').json()
-    if list(map(challenge_data.get, ['dojo', 'module', 'challenge', 'practice'])) == [
-        dojo_id,
-        module_id,
-        challenge_id,
-        False,
-    ]:
+    if list(map(challenge_data.get, ['dojo', 'module', 'challenge', 'practice'])) == [dojo_id, module_id, challenge_id, False]:
         flag_length = get_flag_size() - 1
         flag_path = Path('/flag')
-        warn(
-            f'The following information assumes that {apply_style(flag_path)} '
-            'has not been tampered with:'
-        )
+        warn(f'The following information assumes that {apply_style(flag_path)} has not been tampered with:')
         info(f'Excluding the final newline, the flag is {flag_length} characters long.')
         middle_count = flag_length - len(flag_prefix) - len(flag_suffix)
-        info(
-            f'You only need to figure out the middle {middle_count} characters '
-            'of the flag.'
-        )
+        info(f'You only need to figure out the middle {middle_count} characters of the flag.')
 
     else:
         flag_length = len(f'pwn.college{{{fake_flag}}}')
-        warn(
-            'You are not running the correct challenge in standard mode, so '
-            'the real flag size cannot be measured.'
-        )
-        info(
-            f'Excluding the final newline, the flag is about {flag_length} '
-            'characters long.'
-        )
-        info(
-            'You would only need to figure out the middle '
-            f'{fake_flag.index(".")} characters of the flag.'
-        )
+        warn('You are not running the correct challenge in standard mode, so the real flag size cannot be measured.')
+        info(f'Excluding the final newline, the flag is about {flag_length} characters long.')
+        info(f'You would only need to figure out the middle {fake_flag.index(".")} characters of the flag.')
 
 
 def submit_flag(
-    flag: str | None = None,
-    dojo_id: str | None = None,
-    module_id: str | None = None,
-    challenge_id: str | None = None,
+    flag: str | None = None, dojo_id: str | None = None, module_id: str | None = None, challenge_id: str | None = None
 ):
-    (dojo_id, module_id, challenge_id), (account_id, challenge_num_id) = (
-        get_challenge_info(dojo_id, module_id, challenge_id)
-    )
+    (dojo_id, module_id, challenge_id), (account_id, challenge_num_id) = get_challenge_info(dojo_id, module_id, challenge_id)
 
     while not flag:
         flag = input('Enter the flag: ').strip()
@@ -547,11 +448,7 @@ def submit_flag(
 
     payload = deserialize_flag(flag)
 
-    if (
-        isinstance(payload, list)
-        and len(payload) == 2
-        and all(isinstance(i, int) for i in payload)
-    ):
+    if isinstance(payload, list) and len(payload) == 2 and all(isinstance(i, int) for i in payload):
         if payload[0] != account_id:
             warn('This flag is from another account! Are you sure you want to submit?')
             if input('(y/N) > ').strip()[:1].lower() != 'y':
@@ -559,17 +456,13 @@ def submit_flag(
                 return
 
         if payload[1] != challenge_num_id:
-            warn(
-                'This flag is from another challenge! Are you sure you want to submit?'
-            )
+            warn('This flag is from another challenge! Are you sure you want to submit?')
             if input('(y/N) > ').strip()[:1].lower() != 'y':
                 warn('Aborting flag submission attempt!')
                 return
 
         challenge_data = request('/docker').json()
-        if list(
-            map(challenge_data.get, ['dojo', 'module', 'challenge', 'practice'])
-        ) == [
+        if list(map(challenge_data.get, ['dojo', 'module', 'challenge', 'practice'])) == [
             dojo_id,
             module_id,
             challenge_id,
@@ -577,23 +470,16 @@ def submit_flag(
         ]:
             flag_length = get_flag_size() - 1
         else:
-            flag_length = len(
-                f'pwn.college{{{serialize_flag(account_id, challenge_num_id)}}}'
-            )
+            flag_length = len(f'pwn.college{{{serialize_flag(account_id, challenge_num_id)}}}')
 
         full_flag_mismatch = (
-            re.fullmatch(r'pwn\.college\{[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.?\}', flag)
-            and len(flag) != flag_length
+            re.fullmatch(r'pwn\.college\{[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.?\}', flag) and len(flag) != flag_length
         )
         partial_flag_mismatch = (
-            re.fullmatch(r'[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.?', flag)
-            and len(f'pwn.college{{{flag}}}') != flag_length
+            re.fullmatch(r'[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.?', flag) and len(f'pwn.college{{{flag}}}') != flag_length
         )
         if full_flag_mismatch or partial_flag_mismatch:
-            warn(
-                'This flag is the wrong size! The real flag length is '
-                f'{flag_length}. Are you sure you want to submit?'
-            )
+            warn(f'This flag is the wrong size! The real flag length is {flag_length}. Are you sure you want to submit?')
             if input('(y/N) > ').strip()[:1].lower() != 'y':
                 warn('Aborting flag submission attempt!')
                 return

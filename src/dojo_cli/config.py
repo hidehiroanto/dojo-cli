@@ -26,13 +26,7 @@ DEFAULT_CONFIG = {
     'cookie_path': str(XDG_CACHE_HOME.expanduser() / 'dojo-cli' / 'cookie.json'),
     'editor': 'Visual Studio Code',
     'mount': {'implementation': 'sshfs', 'provider': 'auto'},
-    'log_styles': {
-        'error': 'on red',
-        'fail': 'b red',
-        'info': 'b blue',
-        'success': 'b green',
-        'warn': 'b yellow',
-    },
+    'log_styles': {'error': 'on red', 'fail': 'b red', 'info': 'b blue', 'success': 'b green', 'warn': 'b yellow'},
     'object_styles': {
         'False': 'b i bright_red',
         'None': 'b i magenta',
@@ -62,10 +56,7 @@ DEFAULT_CONFIG = {
         'mount_point': str(XDG_DATA_HOME.expanduser() / 'dojo-cli' / 'mnt'),
         'project_path': '/home/hacker',
     },
-    'table': {
-        'box': 'ROUNDED',
-        'column': {'justify': 'center', 'style': 'green'},
-    },
+    'table': {'box': 'ROUNDED', 'column': {'justify': 'center', 'style': 'green'}},
 }
 
 DEFAULT_CONFIG_PATH = XDG_CONFIG_HOME / 'dojo-cli' / 'config'
@@ -86,10 +77,7 @@ def load_config(config_path: Path) -> object:
         parsed = yaml.safe_load(config_data)
         return {} if parsed is None else parsed
     except (OSError, yaml.YAMLError) as e:
-        rprint(
-            f'[[on red]ERROR[/]] Error loading config file at [b]{config_path}[/]: {e}',
-            file=sys.stderr,
-        )
+        rprint(f'[[on red]ERROR[/]] Error loading config file at [b]{config_path}[/]: {e}', file=sys.stderr)
         sys.exit(1)
 
 
@@ -108,19 +96,13 @@ def validate_config(config: object, defaults: dict, path: str = '') -> list[str]
         if isinstance(default, dict):
             errors.extend(validate_config(value, default, location))
         elif type(value) is not type(default):
-            errors.append(
-                f'{location} must be {type(default).__name__}, '
-                f'not {type(value).__name__}'
-            )
+            errors.append(f'{location} must be {type(default).__name__}, not {type(value).__name__}')
     return errors
 
 
 def report_config_errors(config_path: Path, errors: list[str]):
     """Report configuration validation failures and exit."""
-    rprint(
-        f'[[on red]ERROR[/]] Invalid config file at [b]{config_path}[/]:',
-        file=sys.stderr,
-    )
+    rprint(f'[[on red]ERROR[/]] Invalid config file at [b]{config_path}[/]:', file=sys.stderr)
     for message in errors:
         rprint(f'  - {message}', file=sys.stderr)
     sys.exit(1)
@@ -129,17 +111,9 @@ def report_config_errors(config_path: Path, errors: list[str]):
 def deepmerge(dst_dict: dict, src_dict: dict) -> dict:
     final_dict = deepcopy(dst_dict)
     for key, value in src_dict.items():
-        if (
-            key in dst_dict
-            and isinstance(dst_dict[key], dict)
-            and isinstance(value, dict)
-        ):
+        if key in dst_dict and isinstance(dst_dict[key], dict) and isinstance(value, dict):
             final_dict[key] = deepmerge(dst_dict[key], value)
-        elif (
-            key in dst_dict
-            and isinstance(dst_dict[key], list)
-            and isinstance(value, list)
-        ):
+        elif key in dst_dict and isinstance(dst_dict[key], list) and isinstance(value, list):
             final_dict[key] = sorted(set(deepcopy(dst_dict[key]) + deepcopy(value)))
         else:
             final_dict[key] = deepcopy(value)

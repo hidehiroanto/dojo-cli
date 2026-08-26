@@ -117,20 +117,9 @@ class SocketIoSession:
         response = await self.session.request(method, url, timeout=timeout, **kwargs)
         return ResponseAdapter(response)
 
-    async def ws_connect(
-        self,
-        url: str,
-        *,
-        headers: dict | None = None,
-        timeout=None,
-        verify: bool = True,
-    ) -> WebSocketAdapter:
+    async def ws_connect(self, url: str, *, headers: dict | None = None, timeout=None, verify: bool = True) -> WebSocketAdapter:
         response = await self.session.get(
-            url,
-            headers=headers,
-            stream=True,
-            timeout=self.normalize_timeout(timeout),
-            verify=verify,
+            url, headers=headers, stream=True, timeout=self.normalize_timeout(timeout), verify=verify
         )
         return WebSocketAdapter(response)
 
@@ -154,9 +143,7 @@ class SocketIoEngineClient(engineio.AsyncClient):
         for header, value in list(headers.items()):
             if header.lower() == 'cookie':
                 cookie_jar = SimpleCookie(value)
-                self.http.update_cookies(
-                    {key: morsel.value for key, morsel in cookie_jar.items()}
-                )
+                self.http.update_cookies({key: morsel.value for key, morsel in cookie_jar.items()})
                 del headers[header]
                 break
 
@@ -165,10 +152,7 @@ class SocketIoEngineClient(engineio.AsyncClient):
         try:
             timestamp_url = websocket_url + self._get_url_timestamp()
             ws = await self.http.ws_connect(
-                timestamp_url,
-                headers=headers,
-                timeout=self.request_timeout,
-                verify=self.ssl_verify,
+                timestamp_url, headers=headers, timeout=self.request_timeout, verify=self.ssl_verify
             )
         except RequestException:
             if upgrade:
@@ -177,22 +161,12 @@ class SocketIoEngineClient(engineio.AsyncClient):
             raise engineio.exceptions.ConnectionError('Connection error')
 
         if upgrade:
-            packet_data = engineio.packet.Packet(
-                engineio.packet.PING, data='probe'
-            ).encode()
+            packet_data = engineio.packet.Packet(engineio.packet.PING, data='probe').encode()
             try:
                 await ws.send_str(packet_data)
                 packet_data = (await ws.receive()).data
-            except (
-                OSError,
-                RequestException,
-                RuntimeError,
-                TypeError,
-                ValueError,
-            ) as exc:
-                self.logger.warning(
-                    'WebSocket upgrade failed: unexpected exception: %s', str(exc)
-                )
+            except (OSError, RequestException, RuntimeError, TypeError, ValueError) as exc:
+                self.logger.warning('WebSocket upgrade failed: unexpected exception: %s', str(exc))
                 return False
 
             packet = engineio.packet.Packet(encoded_packet=packet_data)
@@ -203,16 +177,8 @@ class SocketIoEngineClient(engineio.AsyncClient):
             packet_data = engineio.packet.Packet(engineio.packet.UPGRADE).encode()
             try:
                 await ws.send_str(packet_data)
-            except (
-                OSError,
-                RequestException,
-                RuntimeError,
-                TypeError,
-                ValueError,
-            ) as exc:
-                self.logger.warning(
-                    'WebSocket upgrade failed: unexpected send exception: %s', str(exc)
-                )
+            except (OSError, RequestException, RuntimeError, TypeError, ValueError) as exc:
+                self.logger.warning('WebSocket upgrade failed: unexpected send exception: %s', str(exc))
                 return False
 
             self.current_transport = 'websocket'
@@ -220,16 +186,8 @@ class SocketIoEngineClient(engineio.AsyncClient):
         else:
             try:
                 packet_data = (await ws.receive()).data
-            except (
-                OSError,
-                RequestException,
-                RuntimeError,
-                TypeError,
-                ValueError,
-            ) as exc:
-                raise engineio.exceptions.ConnectionError(
-                    'Unexpected recv exception: ' + str(exc)
-                )
+            except (OSError, RequestException, RuntimeError, TypeError, ValueError) as exc:
+                raise engineio.exceptions.ConnectionError('Unexpected recv exception: ' + str(exc))
 
             open_packet = engineio.packet.Packet(encoded_packet=packet_data)
             if open_packet.packet_type != engineio.packet.OPEN:
@@ -239,17 +197,11 @@ class SocketIoEngineClient(engineio.AsyncClient):
 
             packet_values = cast(dict[str, object], open_packet.data)
 
-            self.logger.info(
-                'WebSocket connection accepted with ' + str(open_packet.data)
-            )
+            self.logger.info('WebSocket connection accepted with ' + str(open_packet.data))
             self.sid = cast(str, packet_values['sid'])
             self.upgrades = cast(list[str], packet_values['upgrades'])
-            self.ping_interval = (
-                int(cast(int | str, packet_values['pingInterval'])) / 1000.0
-            )
-            self.ping_timeout = (
-                int(cast(int | str, packet_values['pingTimeout'])) / 1000.0
-            )
+            self.ping_interval = int(cast(int | str, packet_values['pingInterval'])) / 1000.0
+            self.ping_timeout = int(cast(int | str, packet_values['pingTimeout'])) / 1000.0
             self.current_transport = 'websocket'
             self.state = 'connected'
             engineio.base_client.connected_clients.append(self)
@@ -265,18 +217,9 @@ class SocketIoEngineClient(engineio.AsyncClient):
             self.http = SocketIoSession()
 
         try:
-            return await self.http.request(
-                method,
-                url,
-                data=body,
-                headers=headers,
-                timeout=timeout,
-                verify=self.ssl_verify,
-            )
+            return await self.http.request(method, url, data=body, headers=headers, timeout=timeout, verify=self.ssl_verify)
         except RequestException as exc:
-            self.logger.info(
-                'HTTP %s request to %s failed with error %s.', method, url, exc
-            )
+            self.logger.info('HTTP %s request to %s failed with error %s.', method, url, exc)
             return str(exc)
 
 
@@ -289,24 +232,16 @@ class SocketIoSimpleClient(AsyncSimpleClient):
     client_class = SocketIoClient
 
 
-async def close_socketio_client(
-    sio: SocketIoSimpleClient | None, http_session: SocketIoSession | None
-):
+async def close_socketio_client(sio: SocketIoSimpleClient | None, http_session: SocketIoSession | None):
     if sio is not None and sio.client is not None:
         engine_client = sio.client.eio
         engine_client.state = 'disconnected'
-        tasks = [
-            task
-            for task in (engine_client.write_loop_task, engine_client.read_loop_task)
-            if task is not None
-        ]
+        tasks = [task for task in (engine_client.write_loop_task, engine_client.read_loop_task) if task is not None]
         for task in tasks:
             task.cancel()
         if tasks:
             try:
-                await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True), timeout=1
-                )
+                await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=1)
             except TimeoutError:
                 pass
         if engine_client.ws is not None:

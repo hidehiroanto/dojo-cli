@@ -73,18 +73,12 @@ def tokenize(source: str) -> list[Token]:
             try:
                 value = json.loads(raw)
             except json.JSONDecodeError as exc:
-                raise JsoncEditError(
-                    f'Invalid string at byte {index}: {exc.msg}.'
-                ) from exc
+                raise JsoncEditError(f'Invalid string at byte {index}: {exc.msg}.') from exc
             tokens.append(Token('string', value, index, end))
             index = end
             continue
         end = index
-        while (
-            end < len(source)
-            and not source[end].isspace()
-            and source[end] not in '{}[]:,'
-        ):
+        while end < len(source) and not source[end].isspace() and source[end] not in '{}[]:,':
             if source.startswith('//', end) or source.startswith('/*', end):
                 break
             end += 1
@@ -145,9 +139,7 @@ class Parser:
         while (token := self.current()) is not None and token.kind != '}':
             key = self.take('string')
             if key.value in members:
-                raise JsoncEditError(
-                    f'Duplicate key {key.value!r} at byte {key.start}.'
-                )
+                raise JsoncEditError(f'Duplicate key {key.value!r} at byte {key.start}.')
             self.take(':')
             value = self.parse_value()
             members[str(key.value)] = value
@@ -194,16 +186,7 @@ class Parser:
                 position = token.start if token else len(self.tokens)
                 raise JsoncEditError(f'Expected comma at byte {position}.')
         closing = self.take(']')
-        return Node(
-            'array',
-            opening.start,
-            closing.end,
-            opening.end,
-            closing.start,
-            content_end,
-            trailing_comma,
-            items=items,
-        )
+        return Node('array', opening.start, closing.end, opening.end, closing.start, content_end, trailing_comma, items=items)
 
 
 def line_indent(source: str, position: int) -> str:

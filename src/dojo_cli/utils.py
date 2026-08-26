@@ -24,11 +24,7 @@ if os.getenv('TERM_PROGRAM') not in ['Apple_Terminal']:
 
 
 def fix_markdown_links(markdown: str) -> str:
-    return re.sub(
-        r'\[([^\]]+)\]\((\/[^\)]+)\)',
-        rf'[\1]({load_user_config()["base_url"]}\2)',
-        markdown,
-    )
+    return re.sub(r'\[([^\]]+)\]\((\/[^\)]+)\)', rf'[\1]({load_user_config()["base_url"]}\2)', markdown)
 
 
 def paginate(items: list, page: int | None, page_size: int = 20) -> list:
@@ -84,9 +80,7 @@ def show_table(
             overflow=column_overflow,
         )
 
-    table = Table(
-        *map(get_column, keys), title=title, box=get_box(table_config['box']), **kwargs
-    )
+    table = Table(*map(get_column, keys), title=title, box=get_box(table_config['box']), **kwargs)
     [table.add_row(*[apply_style(row[key]) for key in keys]) for row in table_data]
     rprint(table)
 
@@ -97,19 +91,9 @@ def get_belt_hex(belt: str | None) -> str:
 
 def can_render_image():
     term, term_program = os.getenv('TERM'), os.getenv('TERM_PROGRAM')
-    if term in ['alacritty'] or term_program in [
-        'Apple_Terminal',
-        'tmux',
-        'WarpTerminal',
-        'zed',
-    ]:
+    if term in ['alacritty'] or term_program in ['Apple_Terminal', 'tmux', 'WarpTerminal', 'zed']:
         return False
-    if term in ['xterm-kitty'] or term_program in [
-        'ghostty',
-        'iTerm.app',
-        'vscode',
-        'WezTerm',
-    ]:
+    if term in ['xterm-kitty'] or term_program in ['ghostty', 'iTerm.app', 'vscode', 'WezTerm']:
         return True
     return issubclass(Image, (SixelImage, TGPImage))
 

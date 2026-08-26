@@ -28,11 +28,7 @@ class RemoteClient(fuse.Operations):
         hostname = kwargs.get('hostname', ssh_config['HostName'])
         port = kwargs.get('port', ssh_config['Port'])
         username = kwargs.get('username', ssh_config['User'])
-        key_filename = (
-            Path(kwargs.get('key_filename', ssh_config['IdentityFile']))
-            .expanduser()
-            .resolve()
-        )
+        key_filename = Path(kwargs.get('key_filename', ssh_config['IdentityFile'])).expanduser().resolve()
         self.project_path = Path(kwargs.get('project_path', ssh_config['project_path']))
 
         self.ssh = SSHClient()
@@ -119,10 +115,7 @@ class RemoteClient(fuse.Operations):
         try:
             stat_result = self.sftp.lstat(path)
             if stat.S_ISDIR(stat_result.st_mode):
-                return sum(
-                    self.getsize(str(Path(path) / child))
-                    for child in self.sftp.listdir(path)
-                )
+                return sum(self.getsize(str(Path(path) / child)) for child in self.sftp.listdir(path))
             elif stat.S_ISREG(stat_result.st_mode) or stat.S_ISLNK(stat_result.st_mode):
                 return stat_result.st_size
             else:

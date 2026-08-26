@@ -19,26 +19,11 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.content import Content
 from textual.css.query import NoMatches
 from textual.widget import Widget
-from textual.widgets import (
-    Button,
-    Checkbox,
-    ContentSwitcher,
-    Input,
-    Label,
-    Static,
-    Tab,
-    Tabs,
-)
+from textual.widgets import Button, Checkbox, ContentSwitcher, Input, Label, Static, Tab, Tabs
 from textual.widgets.tree import TreeNode
 from trogon.detect_run_string import detect_run_string
 from trogon.introspect import ArgumentSchema, MultiValueParamData, OptionSchema
-from trogon.trogon import (
-    CommandBuilder,
-    CommandForm,
-    CommandInfo,
-    CommandSchema,
-    Trogon,
-)
+from trogon.trogon import CommandBuilder, CommandForm, CommandInfo, CommandSchema, Trogon
 from trogon.widgets.command_info import CommandMetadata
 from trogon.widgets.multiple_choice import NonFocusableVerticalScroll
 from trogon.widgets.parameter_controls import (
@@ -61,9 +46,7 @@ class CustomCheckbox(Checkbox):
     def _button(self) -> Content:
         button_value = self.BUTTON_INNER_ON if self.value else self.BUTTON_INNER_OFF
         button_style = self.get_visual_style('toggle--button')
-        return Content.assemble(
-            (self.BUTTON_LEFT + button_value + self.BUTTON_RIGHT, button_style)
-        )
+        return Content.assemble((self.BUTTON_LEFT + button_value + self.BUTTON_RIGHT, button_style))
 
 
 class CustomParameterControls(ParameterControls):
@@ -75,9 +58,7 @@ class CustomParameterControls(ParameterControls):
             self.display = True
             if help_text:
                 try:
-                    help_label = self.query_one(
-                        '.command-form-control-help-text', Static
-                    )
+                    help_label = self.query_one('.command-form-control-help-text', Static)
                     help_label.update(render_markdown(help_text))
                 except NoMatches:
                     pass
@@ -87,9 +68,7 @@ class CustomParameterControls(ParameterControls):
         if isinstance(name, str):
             should_be_visible = filter_query in name.casefold()
         else:
-            name_contains_query = any(
-                filter_query in name.casefold() for name in self.schema.name
-            )
+            name_contains_query = any(filter_query in name.casefold() for name in self.schema.name)
             help_contains_query = filter_query in help_text.casefold()
             should_be_visible = name_contains_query or help_contains_query
 
@@ -99,9 +78,7 @@ class CustomParameterControls(ParameterControls):
             try:
                 help_label = self.query_one('.command-form-control-help-text', Static)
                 new_help_text = Text(help_text)
-                new_help_text.highlight_words(
-                    filter_query.split(), 'black on yellow', case_sensitive=False
-                )
+                new_help_text.highlight_words(filter_query.split(), 'black on yellow', case_sensitive=False)
                 help_label.update(new_help_text)
             except NoMatches:
                 pass
@@ -119,9 +96,7 @@ class CustomParameterControls(ParameterControls):
         nargs = schema.nargs
 
         assert isinstance(argument_type, click.types.ParamType)
-        label = self._make_command_form_control_label(
-            name, argument_type, is_option, schema.required, multiple=multiple
-        )
+        label = self._make_command_form_control_label(name, argument_type, is_option, schema.required, multiple=multiple)
         first_focus_control: Widget | None = None
 
         with ControlGroupsContainer():
@@ -132,11 +107,7 @@ class CustomParameterControls(ParameterControls):
             if isinstance(argument_type, click.Choice) and multiple:
                 control_method = self.get_control_method(argument_type)
                 multiple_choice_widget = control_method(
-                    default=default,
-                    label=label,
-                    multiple=multiple,
-                    schema=schema,
-                    control_id=schema.key,
+                    default=default, label=label, multiple=multiple, schema=schema, control_id=schema.key
                 )
                 yield from multiple_choice_widget
             else:
@@ -147,9 +118,7 @@ class CustomParameterControls(ParameterControls):
                         if len(widget_group) == 1:
                             control_group.add_class('single-item')
 
-                        for default_value, control_widget in zip(
-                            default_value_tuple, widget_group
-                        ):
+                        for default_value, control_widget in zip(default_value_tuple, widget_group):
                             self._apply_default_value(control_widget, default_value)
                             yield control_widget
                             if first_focus_control is None:
@@ -174,9 +143,7 @@ class CustomParameterControls(ParameterControls):
                 yield Button('+ value', variant='success', classes='add-another-button')
 
         if help_text:
-            yield Static(
-                render_markdown(help_text), classes='command-form-control-help-text'
-            )
+            yield Static(render_markdown(help_text), classes='command-form-control-help-text')
 
     def get_control_method(self, argument_type: Any) -> Callable:
         # See https://github.com/Textualize/trogon/pull/123
@@ -186,11 +153,7 @@ class CustomParameterControls(ParameterControls):
 
     @staticmethod
     def make_checkbox_control(
-        default: MultiValueParamData,
-        label: Text | None,
-        multiple: bool,
-        schema: OptionSchema | ArgumentSchema,
-        control_id: str,
+        default: MultiValueParamData, label: Text | None, multiple: bool, schema: OptionSchema | ArgumentSchema, control_id: str
     ) -> Iterable[ControlWidgetType]:
         control = CustomCheckbox(
             label or '',
@@ -210,32 +173,22 @@ class CustomCommandForm(CommandForm):
         with VerticalScroll() as vs:
             vs.can_focus = False
 
-            yield Input(
-                placeholder='Search...',
-                classes='command-form-filter-input',
-                id='search',
-            )
+            yield Input(placeholder='Search...', classes='command-form-filter-input', id='search')
 
             while command_node is not None:
                 options = command_node.options
                 arguments = command_node.arguments
                 if options or arguments:
-                    with Vertical(
-                        classes='command-form-command-group', id=command_node.key
-                    ) as v:
+                    with Vertical(classes='command-form-command-group', id=command_node.key) as v:
                         is_inherited = command_node is not self.command_schema
-                        v.border_title = (
-                            f'{"↪ " if is_inherited else ""}{command_node.name}'
-                        )
+                        v.border_title = f'{"↪ " if is_inherited else ""}{command_node.name}'
                         if is_inherited:
                             assert v.border_title
                             v.border_title += ' [dim not bold](inherited)'
                         if arguments:
                             yield Label('Arguments', classes='command-form-heading')
                             for argument in arguments:
-                                controls = CustomParameterControls(
-                                    argument, id=argument.key
-                                )
+                                controls = CustomParameterControls(argument, id=argument.key)
                                 if self.first_control is None:
                                     self.first_control = controls
                                 yield controls
@@ -244,9 +197,7 @@ class CustomCommandForm(CommandForm):
                             yield Label('Options', classes='command-form-heading')
                             for option in options:
                                 assert isinstance(option.key, str)
-                                controls = CustomParameterControls(
-                                    option, id=option.key
-                                )
+                                controls = CustomParameterControls(option, id=option.key)
                                 if self.first_control is None:
                                     self.first_control = controls
                                 yield controls
@@ -259,9 +210,7 @@ class CustomCommandBuilder(CommandBuilder):
         description_box = self.query_one('#home-command-description', Static)
         description_text = markdown_summary(command.docstring)
         description_md = (
-            render_markdown(description_text)
-            if description_text
-            else Text('No description available', style='dim')
+            render_markdown(description_text) if description_text else Text('No description available', style='dim')
         )
         description_box.update(Group(Text(command.name, style='bold'), description_md))
 
@@ -270,9 +219,7 @@ class CustomCommandBuilder(CommandBuilder):
         for child in parent.children:
             await child.remove()
         command_schema = node.data
-        command_form = CustomCommandForm(
-            command_schema=command_schema, command_schemas=self.command_schemas
-        )
+        command_form = CustomCommandForm(command_schema=command_schema, command_schemas=self.command_schemas)
         await parent.mount(command_form)
         if not self.is_grouped_cli:
             command_form.focus()
@@ -286,9 +233,7 @@ class CustomCommandInfo(CommandInfo):
 
         title_style = self.get_component_rich_style('title')
         subtitle_style = self.get_component_rich_style('subtitle')
-        modal_header = Text.assemble(
-            (path_string, title_style), '\n', ('command info', subtitle_style)
-        )
+        modal_header = Text.assemble((path_string, title_style), '\n', ('command info', subtitle_style))
 
         with NonFocusableVerticalScroll(classes='command-info-container'):
             with Vertical(classes='command-info-header'):
@@ -301,23 +246,12 @@ class CustomCommandInfo(CommandInfo):
                 tabs.focus()
                 yield tabs
 
-            command_info = (
-                normalize_markdown(self.command_schema.docstring)
-                or 'No description available'
-            )
+            command_info = normalize_markdown(self.command_schema.docstring) or 'No description available'
 
-            with ContentSwitcher(
-                initial='command-info-text', id='command-info-switcher'
-            ):
-                yield Static(
-                    render_markdown(command_info),
-                    id='command-info-text',
-                    classes='command-info-text',
-                )
+            with ContentSwitcher(initial='command-info-text', id='command-info-switcher'):
+                yield Static(render_markdown(command_info), id='command-info-text', classes='command-info-text')
                 yield CommandMetadata(
-                    command_schema=self.command_schema,
-                    id='command-info-metadata',
-                    classes='command-info-metadata',
+                    command_schema=self.command_schema, id='command-info-metadata', classes='command-info-metadata'
                 )
 
 
@@ -389,10 +323,7 @@ def click_type_for(argument) -> click.ParamType:
 
 def is_positional(argument) -> bool:
     field_info = argument.field_info
-    return (
-        field_info.kind in (field_info.POSITIONAL_ONLY, field_info.VAR_POSITIONAL)
-        or argument.index is not None
-    )
+    return field_info.kind in (field_info.POSITIONAL_ONLY, field_info.VAR_POSITIONAL) or argument.index is not None
 
 
 def option_decls(argument) -> list[str]:
@@ -405,21 +336,14 @@ def option_decls(argument) -> list[str]:
     positive_long = next((name for name in names if name.startswith('--')), None)
     negative_long = next((name for name in negatives if name.startswith('--')), None)
     if positive_long and negative_long:
-        return [
-            f'{positive_long}/{negative_long}',
-            *[name for name in names if name != positive_long],
-        ]
+        return [f'{positive_long}/{negative_long}', *[name for name in names if name != positive_long]]
 
     return [*names, *negatives]
 
 
 def build_click_argument(argument) -> click.Argument:
     token_count, consume_all = argument.token_count()
-    kwargs: dict[str, Any] = {
-        'required': argument.required,
-        'type': click_type_for(argument),
-        'default': default_for(argument),
-    }
+    kwargs: dict[str, Any] = {'required': argument.required, 'type': click_type_for(argument), 'default': default_for(argument)}
     if consume_all:
         kwargs['nargs'] = -1
     elif token_count not in (0, 1):
@@ -452,18 +376,10 @@ def build_click_params(app: CycloptsApp) -> list[click.Parameter]:
     if app.default_command is None:
         return []
 
-    arguments = [
-        argument
-        for argument in app.assemble_argument_collection(parse_docstring=True)
-        if argument.show
-    ]
+    arguments = [argument for argument in app.assemble_argument_collection(parse_docstring=True) if argument.show]
     params: list[click.Parameter] = []
     for argument in arguments:
-        params.append(
-            build_click_argument(argument)
-            if is_positional(argument)
-            else build_click_option(argument)
-        )
+        params.append(build_click_argument(argument) if is_positional(argument) else build_click_option(argument))
     return params
 
 
@@ -471,11 +387,7 @@ def build_click_callback(app: CycloptsApp) -> Callable | None:
     callback = app.default_command
     if callback is None:
         return None
-    arguments = [
-        argument
-        for argument in app.assemble_argument_collection(parse_docstring=True)
-        if argument.show
-    ]
+    arguments = [argument for argument in app.assemble_argument_collection(parse_docstring=True) if argument.show]
 
     @wraps(callback)
     def invoke(**values):
@@ -506,9 +418,7 @@ def iter_visible_commands(app: CycloptsApp) -> Iterable[tuple[str, CycloptsApp]]
         yield command_name, command_app
 
 
-def build_click_proxy(
-    app: CycloptsApp, command_name: str | None = None
-) -> click.Command | click.Group:
+def build_click_proxy(app: CycloptsApp, command_name: str | None = None) -> click.Command | click.Group:
     subcommands = list(iter_visible_commands(app))
     params = build_click_params(app)
     help_text = normalize_markdown(app.help) or None
@@ -522,17 +432,10 @@ def build_click_proxy(
             invoke_without_command=app.default_command is not None,
         )
         for subcommand_name, subcommand_app in subcommands:
-            group.add_command(
-                build_click_proxy(subcommand_app, subcommand_name), name=subcommand_name
-            )
+            group.add_command(build_click_proxy(subcommand_app, subcommand_name), name=subcommand_name)
         return group
 
-    return click.Command(
-        name=command_name,
-        callback=build_click_callback(app),
-        help=help_text,
-        params=params,
-    )
+    return click.Command(name=command_name, callback=build_click_callback(app), help=help_text, params=params)
 
 
 def init_trogon(app: CycloptsApp):

@@ -24,21 +24,12 @@ def apply_style(obj):
         elif obj == Path('/'):
             style = object_styles['path']
         elif obj.parent == Path('/'):
-            return (
-                f'[{object_styles["path"]}]/[/]'
-                f'[{object_styles["filename"]}]{obj.name}[/]'
-            )
+            return f'[{object_styles["path"]}]/[/][{object_styles["filename"]}]{obj.name}[/]'
         else:
-            return (
-                f'[{object_styles["path"]}]{obj.parent}/[/]'
-                f'[{object_styles["filename"]}]{obj.name}[/]'
-            )
+            return f'[{object_styles["path"]}]{obj.parent}/[/][{object_styles["filename"]}]{obj.name}[/]'
 
     elif isinstance(obj, datetime.datetime):
-        return (
-            f'[{object_styles["date"]}]{obj.date()}[/] '
-            f'[{object_styles["time"]}]{obj.time()}[/]'
-        )
+        return f'[{object_styles["date"]}]{obj.date()}[/] [{object_styles["time"]}]{obj.time()}[/]'
 
     else:
         type_name = type(obj).__name__

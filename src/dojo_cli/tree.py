@@ -7,15 +7,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import (
-    Button,
-    Footer,
-    Label,
-    Markdown,
-    MarkdownViewer,
-    Static,
-    Tree,
-)
+from textual.widgets import Button, Footer, Label, Markdown, MarkdownViewer, Static, Tree
 
 from .challenge import resolve_catalog_path, sort_dojos
 from .http import authentication_available, request
@@ -51,11 +43,7 @@ def render_details(data: dict | None, can_start: bool = True) -> str:
     elif kind == 'challenge':
         required = data.get('required')
         required_text = 'yes' if required else 'no' if required is not None else '?'
-        start_text = (
-            'Press `enter` to choose Standard or Privileged mode.'
-            if can_start
-            else 'Log in to start this challenge.'
-        )
+        start_text = 'Press `enter` to choose Standard or Privileged mode.' if can_start else 'Log in to start this challenge.'
         details = [
             f'# {display_name(data, "challenge")}',
             '',
@@ -124,11 +112,7 @@ class VimTree(Tree):
         self._pending_g = False
 
     def on_key(self, event):
-        if (
-            event.character
-            and event.character.isdigit()
-            and (event.character != '0' or self._count)
-        ):
+        if event.character and event.character.isdigit() and (event.character != '0' or self._count):
             self._count += event.character
             self._pending_g = False
             event.stop()
@@ -252,20 +236,11 @@ class StartChallengeModal(ModalScreen):
                 summary.append(f' ({item["id"]})\n', style='dim')
             yield Label(summary)
             yield Label('', id='start-error')
-            note = (
-                'Privileged mode is unavailable for this challenge.'
-                if self.allow_privileged is False
-                else ''
-            )
+            note = 'Privileged mode is unavailable for this challenge.' if self.allow_privileged is False else ''
             yield Label(note, id='start-note')
             with Horizontal(id='mode-actions'):
                 yield Button('Standard', id='standard', variant='success')
-                yield Button(
-                    'Privileged',
-                    id='privileged',
-                    variant='warning',
-                    disabled=self.allow_privileged is False,
-                )
+                yield Button('Privileged', id='privileged', variant='warning', disabled=self.allow_privileged is False)
             with Horizontal(id='cancel-actions'):
                 yield Button('Cancel', id='cancel', variant='error')
 
@@ -273,11 +248,7 @@ class StartChallengeModal(ModalScreen):
         focused_id = self.focused.id if self.focused else None
         target_id = None
         privileged_available = self.allow_privileged is not False
-        if (
-            focused_id == 'standard'
-            and event.key in ('left', 'right')
-            and privileged_available
-        ):
+        if focused_id == 'standard' and event.key in ('left', 'right') and privileged_available:
             target_id = 'privileged'
         elif focused_id == 'privileged' and event.key in ('left', 'right'):
             target_id = 'standard'
@@ -285,11 +256,7 @@ class StartChallengeModal(ModalScreen):
             self.last_mode_id = focused_id
             target_id = 'cancel'
         elif focused_id == 'cancel' and event.key == 'up':
-            target_id = (
-                self.last_mode_id
-                if self.last_mode_id != 'privileged' or privileged_available
-                else 'standard'
-            )
+            target_id = self.last_mode_id if self.last_mode_id != 'privileged' or privileged_available else 'standard'
         elif focused_id == 'cancel' and event.key == 'left':
             target_id = 'standard'
         elif focused_id == 'cancel' and event.key == 'right':
@@ -317,9 +284,7 @@ class StartChallengeModal(ModalScreen):
             self.last_mode_id = 'standard'
             self.query_one('#privileged', Button).disabled = True
             self.query_one('#standard', Button).focus()
-            self.query_one('#start-note', Label).update(
-                'Privileged mode is unavailable for this challenge.'
-            )
+            self.query_one('#start-note', Label).update('Privileged mode is unavailable for this challenge.')
         self.query_one('#start-error', Label).update(message)
 
     def action_start_standard(self) -> None:
@@ -352,10 +317,7 @@ class TreeApp(App):
         padding: 0 1;
     }
     """
-    BINDINGS: ClassVar = [
-        Binding('q', 'quit', 'Quit'),
-        Binding('r', 'reload', 'Reload', priority=True),
-    ]
+    BINDINGS: ClassVar = [Binding('q', 'quit', 'Quit'), Binding('r', 'reload', 'Reload', priority=True)]
 
     def __init__(
         self,
@@ -389,36 +351,19 @@ class TreeApp(App):
         else:
             selected_dojos = [require_item(sorted_dojos, self.dojo_id, 'Dojo')]
 
-        self.data = {
-            dojo['id']: {'data': dojo, 'modules': {}} for dojo in selected_dojos
-        }
+        self.data = {dojo['id']: {'data': dojo, 'modules': {}} for dojo in selected_dojos}
         self.loaded_modules = set()
         if self.dojo_id:
-            self.load_initial_modules(
-                self.data[self.dojo_id]['data'], self.module_id, self.challenge_id
-            )
+            self.load_initial_modules(self.data[self.dojo_id]['data'], self.module_id, self.challenge_id)
 
-    def load_initial_modules(
-        self,
-        dojo: dict,
-        module_id: str | None = None,
-        challenge_id: str | None = None,
-    ) -> None:
-        modules = (
-            request(f'/dojos/{dojo["id"]}/modules', auth=self.auth)
-            .json()
-            .get('modules')
-        )
-        selected_modules = (
-            [require_item(modules, module_id, 'Module')] if module_id else modules
-        )
+    def load_initial_modules(self, dojo: dict, module_id: str | None = None, challenge_id: str | None = None) -> None:
+        modules = request(f'/dojos/{dojo["id"]}/modules', auth=self.auth).json().get('modules')
+        selected_modules = [require_item(modules, module_id, 'Module')] if module_id else modules
         for module in selected_modules:
             self.store_module(dojo['id'], module, challenge_id)
         self.loaded_modules.add(dojo['id'])
 
-    def store_module(
-        self, dojo_id: str, module: dict, challenge_id: str | None = None
-    ) -> None:
+    def store_module(self, dojo_id: str, module: dict, challenge_id: str | None = None) -> None:
         module_data = dict(module)
         module_data['_dojo_id'] = dojo_id
         items = module['unified_items']
@@ -426,9 +371,7 @@ class TreeApp(App):
             items = [
                 item
                 for item in items
-                if item['item_type'] == 'resource'
-                or item['item_type'] == 'challenge'
-                and item['id'] == challenge_id
+                if item['item_type'] == 'resource' or item['item_type'] == 'challenge' and item['id'] == challenge_id
             ]
         unified_items = {}
         for item in items:
@@ -436,21 +379,13 @@ class TreeApp(App):
             item_data['_dojo_id'] = dojo_id
             item_data['_module_id'] = module['id']
             unified_items[item['id']] = {'data': item_data}
-        self.data[dojo_id]['modules'][module['id']] = {
-            'data': module_data,
-            'unified_items': unified_items,
-        }
+        self.data[dojo_id]['modules'][module['id']] = {'data': module_data, 'unified_items': unified_items}
 
     def data_key(self, data: dict | None) -> tuple | None:
         if not data:
             return None
         if data.get('item_type') in ('challenge', 'resource'):
-            return (
-                data['item_type'],
-                data['_dojo_id'],
-                data['_module_id'],
-                data['id'],
-            )
+            return (data['item_type'], data['_dojo_id'], data['_module_id'], data['id'])
         if '_dojo_id' in data and 'challenges' in data:
             return 'module', data['_dojo_id'], data['id']
         if 'modules_count' in data:
@@ -458,48 +393,30 @@ class TreeApp(App):
         return None
 
     def add_module_node(self, dojo_node, module: dict) -> None:
-        module_node = dojo_node.add(
-            Text(f'Module: {display_name(module["data"], "module")}', 'markdown.h2'),
-            module['data'],
-        )
+        module_node = dojo_node.add(Text(f'Module: {display_name(module["data"], "module")}', 'markdown.h2'), module['data'])
         self.node_index[self.data_key(module['data'])] = module_node
         for item in module['unified_items'].values():
             data = item['data']
             item_node = None
             if data['item_type'] == 'resource':
                 if data['type'] == 'header':
-                    item_node = module_node.add_leaf(
-                        Text(data['content'], 'markdown.h3'), data
-                    )
+                    item_node = module_node.add_leaf(Text(data['content'], 'markdown.h3'), data)
                 elif data['type'] == 'lecture':
                     data['description'] = ''
                     if data.get('video'):
                         youtube_url = f'https://www.youtube.com/watch?v={data["video"]}'
                         if data.get('playlist'):
                             youtube_url += f'&list={data["playlist"]}'
-                        data['description'] += (
-                            f'Video: [{youtube_url}]({youtube_url})\n\n'
-                        )
+                        data['description'] += f'Video: [{youtube_url}]({youtube_url})\n\n'
                     if data.get('slides'):
-                        slides_url = (
-                            'https://docs.google.com/presentation/d/'
-                            f'{data["slides"]}/embed'
-                        )
-                        data['description'] += (
-                            f'Slides: [{slides_url}]({slides_url})\n\n'
-                        )
-                    item_node = module_node.add_leaf(
-                        f'Lecture: {display_name(data, "resource")}', data
-                    )
+                        slides_url = f'https://docs.google.com/presentation/d/{data["slides"]}/embed'
+                        data['description'] += f'Slides: [{slides_url}]({slides_url})\n\n'
+                    item_node = module_node.add_leaf(f'Lecture: {display_name(data, "resource")}', data)
                 elif data['type'] == 'markdown':
                     data['description'] = data['content']
-                    item_node = module_node.add_leaf(
-                        f'Resource: {display_name(data, "resource")}', data
-                    )
+                    item_node = module_node.add_leaf(f'Resource: {display_name(data, "resource")}', data)
             elif data['item_type'] == 'challenge':
-                item_node = module_node.add_leaf(
-                    f'Challenge: {display_name(data, "challenge")}', data
-                )
+                item_node = module_node.add_leaf(f'Challenge: {display_name(data, "challenge")}', data)
 
             if item_node:
                 self.node_index[self.data_key(data)] = item_node
@@ -511,9 +428,7 @@ class TreeApp(App):
         dojo_id = dojo_data['id']
         if dojo_id in self.loaded_modules:
             return
-        modules = (
-            request(f'/dojos/{dojo_id}/modules', auth=self.auth).json().get('modules')
-        )
+        modules = request(f'/dojos/{dojo_id}/modules', auth=self.auth).json().get('modules')
         for module in modules:
             self.store_module(dojo_id, module)
             module_data = self.data[dojo_id]['modules'][module['id']]
@@ -530,8 +445,7 @@ class TreeApp(App):
             dojo_node = tree.root.add(
                 Text(f'Dojo: {display_name(dojo["data"], "dojo")}', 'markdown.h1'),
                 dojo['data'],
-                allow_expand=bool(dojo['modules'])
-                or dojo['data'].get('modules_count', 0) > 0,
+                allow_expand=bool(dojo['modules']) or dojo['data'].get('modules_count', 0) > 0,
             )
             self.node_index[self.data_key(dojo['data'])] = dojo_node
             for module in dojo['modules'].values():
@@ -550,22 +464,16 @@ class TreeApp(App):
 
     def on_mount(self) -> None:
         viewer = self.query_one('#details', DescriptionViewer)
-        self.call_after_refresh(
-            lambda: viewer.query_one(Markdown).update(ROOT_DESCRIPTION)
-        )
+        self.call_after_refresh(lambda: viewer.query_one(Markdown).update(ROOT_DESCRIPTION))
 
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
         data = event.node.data
         details = render_details(data, self.can_start)
-        self.query_one('#details', DescriptionViewer).query_one(Markdown).update(
-            details
-        )
+        self.query_one('#details', DescriptionViewer).query_one(Markdown).update(details)
         status = self.query_one('#status', Static)
         if data and data.get('item_type') == 'challenge':
             status.update(
-                'Enter opens the Standard / Privileged mode picker.'
-                if self.can_start
-                else 'Log in to start challenges.'
+                'Enter opens the Standard / Privileged mode picker.' if self.can_start else 'Log in to start challenges.'
             )
         elif data and data.get('type') == 'header':
             status.update('Section heading.')
@@ -621,10 +529,7 @@ class TreeApp(App):
             candidates.append(('module', selected[1], selected[2]))
         if selected and selected[0] in ('module', 'resource', 'challenge'):
             candidates.append(('dojo', selected[1]))
-        target = next(
-            (self.node_index[key] for key in candidates if key in self.node_index),
-            tree.root,
-        )
+        target = next((self.node_index[key] for key in candidates if key in self.node_index), tree.root)
         tree.move_cursor(target)
 
     def action_reload(self) -> None:
@@ -668,19 +573,10 @@ def init_tree(
     public: bool = False,
     official: bool = False,
 ) -> bool:
-    dojo_id, module_id, challenge_id = resolve_catalog_path(
-        path, dojo_id, module_id, challenge_id
-    )
+    dojo_id, module_id, challenge_id = resolve_catalog_path(path, dojo_id, module_id, challenge_id)
     can_start = authentication_available()
     if auth and not can_start:
         error('Authentication is required; please log in or run this in the dojo.')
     use_auth = auth or (can_start and not public)
-    app = TreeApp(
-        dojo_id,
-        module_id,
-        challenge_id,
-        use_auth,
-        official,
-        can_start,
-    )
+    app = TreeApp(dojo_id, module_id, challenge_id, use_auth, official, can_start)
     return bool(app.run())
